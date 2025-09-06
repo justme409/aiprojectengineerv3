@@ -1,5 +1,6 @@
 import { query } from '@/lib/db'
 import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { RelationshipEdgeType } from '@/types/graph'
 
 export async function createApprovalWorkflow(input: {
 	project_id: string
@@ -28,7 +29,7 @@ export async function createApprovalWorkflow(input: {
 		edges: [{
 			from_asset_id: '',
 			to_asset_id: input.target_asset_id,
-			edge_type: 'APPLIES_TO'
+			edge_type: 'APPLIES_TO' as RelationshipEdgeType
 		}],
 		idempotency_key: `workflow:${input.project_id}:${input.name}`
 	}
@@ -73,12 +74,12 @@ export async function assignWorkflow(workflowAssetId: string, assigneeId: string
 			{
 				from_asset_id: '',
 				to_asset_id: workflowAssetId,
-				edge_type: 'PART_OF'
+				edge_type: 'PART_OF' as RelationshipEdgeType
 			},
 			{
 				from_asset_id: '',
 				to_asset_id: assigneeId,
-				edge_type: 'ASSIGNED_TO'
+				edge_type: 'ASSIGNED_TO' as RelationshipEdgeType as RelationshipEdgeType
 			}
 		],
 		idempotency_key: `task:${workflowAssetId}:${stepNumber}:${assigneeId}`
@@ -146,7 +147,7 @@ export async function advanceWorkflowStep(workflowAssetId: string, stepNumber: n
 		edges: approverId ? [{
 			from_asset_id: workflowAssetId,
 			to_asset_id: approverId,
-			edge_type: decision === 'approved' ? 'APPROVED_BY' : 'REVIEWED_BY',
+			edge_type: (decision === 'approved' ? 'APPROVED_BY' : 'REVIEWED_BY') as RelationshipEdgeType,
 			properties: {
 				step_number: stepNumber,
 				decision,
@@ -174,7 +175,7 @@ export async function delegateApproval(taskAssetId: string, newAssigneeId: strin
 		edges: [{
 			from_asset_id: taskAssetId,
 			to_asset_id: newAssigneeId,
-			edge_type: 'ASSIGNED_TO'
+			edge_type: 'ASSIGNED_TO' as RelationshipEdgeType
 		}],
 		idempotency_key: `delegate:${taskAssetId}:${newAssigneeId}`
 	}

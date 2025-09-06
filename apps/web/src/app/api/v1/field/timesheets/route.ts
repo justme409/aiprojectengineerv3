@@ -7,11 +7,12 @@ export async function GET(req: NextRequest) {
 
 	if (!projectId) return new Response('project_id required', { status: 400 })
 
-	let timesheets = await getFieldAssets(projectId, 'timesheet')
+	const response = await getFieldAssets(projectId, 'timesheet')
+	let timesheets = (response.success && Array.isArray((response as any).assets)) ? (response as any).assets : []
 
 	// Filter by user if specified
 	if (userId) {
-		timesheets = timesheets.filter(t => t.content?.user_id === userId)
+		timesheets = timesheets.filter((t: any) => t.content?.user_id === userId)
 	}
 
 	return Response.json({ data: timesheets })

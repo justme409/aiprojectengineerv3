@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, FileText, AlertCircle, CheckCircle, Clock, Users, MapPin, Eye, Edit, Download } from 'lucide-react'
 
@@ -34,11 +34,7 @@ export default function SiteInstructionsPage() {
   const [selectedInstruction, setSelectedInstruction] = useState<SiteInstruction | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchInstructions()
-  }, [projectId])
-
-  const fetchInstructions = async () => {
+  const fetchInstructions = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/field/site-instructions`)
       if (response.ok) {
@@ -50,7 +46,11 @@ export default function SiteInstructionsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchInstructions()
+  }, [fetchInstructions])
 
   const filteredInstructions = instructions.filter(instruction => {
     const matchesSearch = instruction.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

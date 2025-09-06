@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, BookOpen, FileText, CheckCircle, AlertTriangle, Eye, Edit, Download } from 'lucide-react'
 
@@ -43,11 +43,7 @@ export default function MethodsPage() {
   const [selectedMethod, setSelectedMethod] = useState<TestMethod | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchMethods()
-  }, [projectId])
-
-  const fetchMethods = async () => {
+  const fetchMethods = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/methods`)
       if (response.ok) {
@@ -59,7 +55,11 @@ export default function MethodsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchMethods()
+  }, [fetchMethods])
 
   const filteredMethods = methods.filter(method => {
     const matchesSearch = method.code.toLowerCase().includes(searchTerm.toLowerCase()) ||

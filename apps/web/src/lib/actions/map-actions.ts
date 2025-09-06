@@ -1,5 +1,6 @@
 import { query } from '@/lib/db'
 import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { RelationshipEdgeType } from '@/types/graph'
 
 export async function upsertGeoFeature(input: {
 	project_id: string
@@ -19,7 +20,7 @@ export async function upsertGeoFeature(input: {
 		edges: input.associated_asset_id ? [{
 			from_asset_id: '',
 			to_asset_id: input.associated_asset_id,
-			edge_type: 'RELATED_TO'
+			edge_type: 'RELATED_TO' as RelationshipEdgeType
 		}] : [],
 		idempotency_key: `geo_feature:${input.project_id}:${input.name}`
 	}

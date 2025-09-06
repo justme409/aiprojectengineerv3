@@ -1,20 +1,61 @@
-import { NextRequest } from 'next/server'
-import { query } from '@/lib/db'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { pool } from '@/lib/db'
 
 export async function GET() {
-	const { rows } = await query('SELECT * FROM public.projects ORDER BY created_at DESC')
-	return Response.json({ data: rows })
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const result = await pool.query(`
+      SELECT p.*, o.name as organization_name
+      FROM public.projects p
+      JOIN public.organizations o ON o.id = p.organization_id
+      JOIN public.organization_users ou ON ou.organization_id = p.organization_id AND ou.user_id = $1
+      ORDER BY p.created_at DESC
+    `, [(session.user as any).id])
+
+    return NextResponse.json({ projects: result.rows })
+  } catch (error) {
+    console.error('Error fetching projects:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
 
-export async function POST(req: NextRequest) {
-	const body = await req.json()
-	const id = body.id || crypto.randomUUID()
-	const orgId = body.organization_id
-	if (!orgId) return new Response('organization_id required', { status: 400 })
-	await query(
-		`INSERT INTO public.projects (id, name, description, location, client_name, created_by_user_id, status, organization_id, settings)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-		[id, body.name, body.description ?? null, body.location ?? null, body.client_name ?? null, body.created_by_user_id ?? null, body.status ?? 'draft', orgId, body.settings ?? {}]
-	)
-	return Response.json({ id })
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { name, description, location, client_name } = body
+
+    // Get user's organization
+    const orgResult = await pool.query(`
+      SELECT organization_id FROM public.organization_users
+      WHERE user_id = $1 LIMIT 1
+    `, [(session.user as any).id])
+
+    if (orgResult.rows.length === 0) {
+      return NextResponse.json({ error: 'User not associated with organization' }, { status: 400 })
+    }
+
+    const organizationId = orgResult.rows[0].organization_id
+
+    // Create project
+    const projectResult = await pool.query(`
+      INSERT INTO public.projects (id, name, description, location, client_name, created_by_user_id, organization_id)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [name, description, location, client_name, (session.user as any).id, organizationId])
+
+    return NextResponse.json({ project: projectResult.rows[0] })
+  } catch (error) {
+    console.error('Error creating project:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

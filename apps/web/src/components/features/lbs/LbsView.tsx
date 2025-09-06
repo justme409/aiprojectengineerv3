@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Plus, MapPin, Layers, Ruler } from 'lucide-react'
 
 interface LbsNode {
@@ -26,11 +26,7 @@ export default function LbsView({ projectId }: LbsViewProps) {
   const [lbsNodes, setLbsNodes] = useState<LbsNode[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchLbsData()
-  }, [projectId])
-
-  const fetchLbsData = async () => {
+  const fetchLbsData = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/plans`)
       const data = await response.json()
@@ -45,7 +41,11 @@ export default function LbsView({ projectId }: LbsViewProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchLbsData()
+  }, [fetchLbsData])
 
   const getNodeIcon = (nodeType: string) => {
     switch (nodeType) {
@@ -75,13 +75,15 @@ export default function LbsView({ projectId }: LbsViewProps) {
     return colors[nodeType as keyof typeof colors] || 'bg-gray-100 text-gray-800'
   }
 
-  const buildHierarchy = (nodes: LbsNode[]) => {
-    const nodeMap = new Map<string, LbsNode & { children: LbsNode[] }>()
-    const rootNodes: (LbsNode & { children: LbsNode[] })[] = []
+  type LbsTreeNode = LbsNode & { children: LbsTreeNode[] }
+
+  const buildHierarchy = (nodes: LbsNode[]): LbsTreeNode[] => {
+    const nodeMap = new Map<string, LbsTreeNode>()
+    const rootNodes: LbsTreeNode[] = []
 
     // Create all nodes
     nodes.forEach(node => {
-      nodeMap.set(node.id, { ...node, children: [] })
+      nodeMap.set(node.id, { ...(node as LbsTreeNode), children: [] })
     })
 
     // Build hierarchy
@@ -96,7 +98,7 @@ export default function LbsView({ projectId }: LbsViewProps) {
     return rootNodes
   }
 
-  const renderNode = (node: LbsNode & { children: LbsNode[] }, level = 0) => (
+  const renderNode = (node: LbsTreeNode, level = 0) => (
     <div key={node.id} className="mb-2">
       <div className={`flex items-center p-3 bg-white border rounded-lg shadow-sm hover:shadow-md transition-shadow ${level > 0 ? 'ml-6' : ''}`}>
         {getNodeIcon(node.node_type)}
@@ -128,7 +130,7 @@ export default function LbsView({ projectId }: LbsViewProps) {
           </button>
         </div>
       </div>
-      {node.children.map(child => renderNode(child, level + 1))}
+      {node.children.map((child: LbsTreeNode) => renderNode(child, level + 1))}
     </div>
   )
 

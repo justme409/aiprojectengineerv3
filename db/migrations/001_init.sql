@@ -36,6 +36,15 @@ CREATE TABLE IF NOT EXISTS public.organizations (
 );
 CREATE INDEX IF NOT EXISTS idx_organizations_name ON public.organizations USING btree(name);
 
+-- Ensure at least one organization exists for seed data
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.organizations) THEN
+    INSERT INTO public.organizations (id, name, domain, metadata)
+    VALUES (gen_random_uuid(), 'Default Organization', NULL, '{}'::jsonb);
+  END IF;
+END$$;
+
 -- Roles, Permissions, Mappings
 CREATE TABLE IF NOT EXISTS public.roles (
   id uuid PRIMARY KEY,
@@ -137,9 +146,9 @@ BEGIN
       idempotency_key text,
       metadata jsonb DEFAULT '{}'::jsonb,
       content jsonb DEFAULT '{}'::jsonb,
-      due_sla_at timestamptz GENERATED ALWAYS AS ((NULLIF(content->>'sla_due_at',''))::timestamptz) STORED,
-      scheduled_at timestamptz GENERATED ALWAYS AS ((NULLIF(content->>'scheduled_at',''))::timestamptz) STORED,
-      requested_for_at timestamptz GENERATED ALWAYS AS ((NULLIF(content->>'requested_for',''))::timestamptz) STORED,
+      due_sla_at timestamptz,
+      scheduled_at timestamptz,
+      requested_for_at timestamptz,
       created_at timestamptz DEFAULT now(),
       created_by uuid,
       updated_at timestamptz DEFAULT now(),
@@ -167,6 +176,27 @@ BEGIN
     ALTER TABLE public.assets
       ADD CONSTRAINT chk_assets_type_valid
       CHECK (type IN ('project','document','drawing','spec','correspondence','email','memo','meeting_minute','rfi','material','mix_design','msds','calibration_certificate','batch_ticket','plan','wbs_node','lbs_node','itp_template','itp_document','lot','inspection_point','inspection_request','inspection_signature','inspection_schedule','test_request','sample','lab','test_method','test_result','measurement','ncr','risk','hazard','control','requirement','standard','clause','policy','procedure','work_instruction','form','record','audit','audit_finding','capa','incident','task','decision','comment','user','role','organization','geo_feature','photo','embedding','processing_run','swms','jsa','permit','toolbox_talk','safety_walk','induction','approval_workflow','rule','retention_policy','legal_hold','compliance_pack','project_compliance_config','daily_diary','site_instruction','timesheet','roster','plant_prestart','maintenance_record','utilization_log'));
+  END IF;
+END$$;
+
+-- Compute timestamp columns from content JSON (replaces non-immutable generated columns)
+CREATE OR REPLACE FUNCTION public.compute_asset_timestamps() RETURNS trigger AS $fn$
+BEGIN
+  NEW.due_sla_at := NULLIF(NEW.content->>'sla_due_at','')::timestamptz;
+  NEW.scheduled_at := NULLIF(NEW.content->>'scheduled_at','')::timestamptz;
+  NEW.requested_for_at := NULLIF(NEW.content->>'requested_for','')::timestamptz;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname='trg_assets_compute_timestamps'
+  ) THEN
+    CREATE TRIGGER trg_assets_compute_timestamps
+    BEFORE INSERT OR UPDATE ON public.assets
+    FOR EACH ROW EXECUTE FUNCTION public.compute_asset_timestamps();
   END IF;
 END$$;
 
@@ -351,129 +381,88 @@ CREATE TABLE IF NOT EXISTS public.project_feature_flags (
 
 -- Helper Functions
 -- set_assets_org_from_project
-DO $$
+CREATE OR REPLACE FUNCTION public.set_assets_org_from_project() RETURNS trigger AS $fn$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE p.proname='set_assets_org_from_project' AND n.nspname='public'
-  ) THEN
-    CREATE FUNCTION public.set_assets_org_from_project() RETURNS trigger AS $$
-    BEGIN
-      IF NEW.project_id IS NOT NULL THEN
-        SELECT organization_id INTO NEW.organization_id FROM public.projects WHERE id = NEW.project_id;
-      END IF;
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
+  IF NEW.project_id IS NOT NULL THEN
+    SELECT organization_id INTO NEW.organization_id FROM public.projects WHERE id = NEW.project_id;
   END IF;
-END$$;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
 
 -- ensure_belongs_to_project_edge
-DO $$
+CREATE OR REPLACE FUNCTION public.ensure_belongs_to_project_edge() RETURNS trigger AS $fn$
+DECLARE project_asset uuid;
+DECLARE existing_edge uuid;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE p.proname='ensure_belongs_to_project_edge' AND n.nspname='public'
-  ) THEN
-    CREATE FUNCTION public.ensure_belongs_to_project_edge() RETURNS trigger AS $$
-    DECLARE project_asset uuid;
-    DECLARE existing_edge uuid;
-    BEGIN
-      IF NEW.project_id IS NULL THEN
-        RETURN NEW;
-      END IF;
-      SELECT id INTO project_asset FROM public.assets
-        WHERE type='project' AND id = NEW.project_id AND is_current AND NOT is_deleted;
-      IF project_asset IS NULL THEN
-        RETURN NEW;
-      END IF;
-      SELECT id INTO existing_edge FROM public.asset_edges
-        WHERE from_asset_id = NEW.id AND edge_type='BELONGS_TO_PROJECT';
-      IF existing_edge IS NULL THEN
-        INSERT INTO public.asset_edges (id, from_asset_id, to_asset_id, edge_type, properties, idempotency_key)
-          VALUES (gen_random_uuid(), NEW.id, project_asset, 'BELONGS_TO_PROJECT', '{}'::jsonb, concat('BELONGS_TO_PROJECT:', NEW.id::text));
-      ELSE
-        UPDATE public.asset_edges SET to_asset_id = project_asset WHERE id = existing_edge;
-      END IF;
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
+  IF NEW.project_id IS NULL THEN
+    RETURN NEW;
   END IF;
-END$$;
+  SELECT id INTO project_asset FROM public.assets
+    WHERE type='project' AND id = NEW.project_id AND is_current AND NOT is_deleted;
+  IF project_asset IS NULL THEN
+    RETURN NEW;
+  END IF;
+  SELECT id INTO existing_edge FROM public.asset_edges
+    WHERE from_asset_id = NEW.id AND edge_type='BELONGS_TO_PROJECT';
+  IF existing_edge IS NULL THEN
+    INSERT INTO public.asset_edges (id, from_asset_id, to_asset_id, edge_type, properties, idempotency_key)
+      VALUES (gen_random_uuid(), NEW.id, project_asset, 'BELONGS_TO_PROJECT', '{}'::jsonb, concat('BELONGS_TO_PROJECT:', NEW.id::text));
+  ELSE
+    UPDATE public.asset_edges SET to_asset_id = project_asset WHERE id = existing_edge;
+  END IF;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
 
 -- prevent_parent_cycle
-DO $$
+CREATE OR REPLACE FUNCTION public.prevent_parent_cycle() RETURNS trigger AS $fn$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE p.proname='prevent_parent_cycle' AND n.nspname='public'
-  ) THEN
-    CREATE FUNCTION public.prevent_parent_cycle() RETURNS trigger AS $$
-    BEGIN
-      IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
-        IF NEW.edge_type = 'PARENT_OF' THEN
-          IF NEW.from_asset_id = NEW.to_asset_id THEN
-            RAISE EXCEPTION 'PARENT_OF cannot be reflexive';
-          END IF;
-          IF EXISTS (
-            SELECT 1 FROM public.asset_edges e
-              WHERE e.edge_type='PARENT_OF'
-                AND e.from_asset_id = NEW.to_asset_id
-                AND e.to_asset_id = NEW.from_asset_id
-          ) THEN
-            RAISE EXCEPTION 'Cycle detected in PARENT_OF';
-          END IF;
-        END IF;
+  IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+    IF NEW.edge_type = 'PARENT_OF' THEN
+      IF NEW.from_asset_id = NEW.to_asset_id THEN
+        RAISE EXCEPTION 'PARENT_OF cannot be reflexive';
       END IF;
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
+      IF EXISTS (
+        SELECT 1 FROM public.asset_edges e
+          WHERE e.edge_type='PARENT_OF'
+            AND e.from_asset_id = NEW.to_asset_id
+            AND e.to_asset_id = NEW.from_asset_id
+      ) THEN
+        RAISE EXCEPTION 'Cycle detected in PARENT_OF';
+      END IF;
+    END IF;
   END IF;
-END$$;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
 
 -- project_flag_enabled
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE p.proname='project_flag_enabled' AND n.nspname='public'
-  ) THEN
-    CREATE FUNCTION public.project_flag_enabled(project_id uuid, flag text) RETURNS boolean AS $$
-      SELECT COALESCE((SELECT (flags ->> flag)::boolean FROM public.project_feature_flags WHERE project_id = $1), false);
-    $$ LANGUAGE sql;
-  END IF;
-END$$;
+CREATE OR REPLACE FUNCTION public.project_flag_enabled(project_id uuid, flag text) RETURNS boolean AS $fn$
+  SELECT COALESCE((SELECT (flags ->> flag)::boolean FROM public.project_feature_flags WHERE project_id = $1), false);
+$fn$ LANGUAGE sql;
 
 -- create_project_asset_from_projects
-DO $$
+CREATE OR REPLACE FUNCTION public.create_project_asset_from_projects() RETURNS trigger AS $fn$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-    WHERE p.proname='create_project_asset_from_projects' AND n.nspname='public'
-  ) THEN
-    CREATE FUNCTION public.create_project_asset_from_projects() RETURNS trigger AS $$
-    BEGIN
-      BEGIN
-        INSERT INTO public.assets (
-          id, asset_uid, version, is_current,
-          type, name, organization_id, project_id,
-          status, classification, metadata, content, created_at, created_by
-        ) VALUES (
-          NEW.id, NEW.id, 1, true,
-          'project', NEW.name, NEW.organization_id, NULL,
-          COALESCE(NEW.status, 'draft'), 'internal', '{}'::jsonb,
-          jsonb_build_object('settings', COALESCE(NEW.settings, '{}'::jsonb)),
-          now(), NEW.created_by_user_id
-        );
-      EXCEPTION WHEN unique_violation THEN
-        -- Ignore if already exists
-        NULL;
-      END;
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql;
-  END IF;
-END$$;
+  BEGIN
+    INSERT INTO public.assets (
+      id, asset_uid, version, is_current,
+      type, name, organization_id, project_id,
+      status, classification, metadata, content, created_at, created_by
+    ) VALUES (
+      NEW.id, NEW.id, 1, true,
+      'project', NEW.name, NEW.organization_id, NULL,
+      COALESCE(NEW.status, 'draft'), 'internal', '{}'::jsonb,
+      jsonb_build_object('settings', COALESCE(NEW.settings, '{}'::jsonb)),
+      now(), NEW.created_by_user_id
+    );
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+  RETURN NEW;
+END;
+$fn$ LANGUAGE plpgsql;
 
 -- Triggers
 DO $$
@@ -520,166 +509,112 @@ BEGIN
   END IF;
 END$$;
 
--- Views (created if not exists via catalog check)
+-- Views
 -- asset_heads
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_views WHERE viewname='asset_heads' AND schemaname='public'
-  ) THEN
-    EXECUTE $$
-      CREATE VIEW public.asset_heads AS
-      SELECT * FROM public.assets WHERE is_current AND NOT is_deleted
-    $$;
-  END IF;
-END$$;
+CREATE OR REPLACE VIEW public.asset_heads AS
+SELECT * FROM public.assets WHERE is_current AND NOT is_deleted;
 
 -- asset_history
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_views WHERE viewname='asset_history' AND schemaname='public'
-  ) THEN
-    EXECUTE $$
-      CREATE VIEW public.asset_history AS
-      SELECT asset_uid, id, version, supersedes_asset_id, is_current, created_at, status
-      FROM public.assets
-      ORDER BY asset_uid, version
-    $$;
-  END IF;
-END$$;
+CREATE OR REPLACE VIEW public.asset_history AS
+SELECT asset_uid, id, version, supersedes_asset_id, is_current, created_at, status
+FROM public.assets
+ORDER BY asset_uid, version;
 
 -- work_lot_register
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_views WHERE viewname='work_lot_register' AND schemaname='public'
-  ) THEN
-    EXECUTE $$
-      CREATE VIEW public.work_lot_register AS
-      WITH lot_assets AS (
-        SELECT a.* FROM public.assets a
-        WHERE a.type='lot' AND a.is_current AND NOT a.is_deleted
-      ),
-      hp_wp AS (
-        SELECT l.id AS lot_id,
-               jsonb_agg(DISTINCT jsonb_build_object(
-                 'inspection_point_id', ip.id,
-                 'code', ip.content->>'code',
-                 'title', ip.content->>'title',
-                 'point_type', ip.content->>'point_type',
-                 'sla_due_at', ip.content->>'sla_due_at',
-                 'notified_at', ip.content->>'notified_at',
-                 'released_at', ip.content->>'released_at',
-                 'approval_state', ip.approval_state
-               )) AS inspection_points
-        FROM lot_assets l
-        JOIN public.asset_edges e ON (e.edge_type IN ('BLOCKED_BY','REFERENCES') AND (e.from_asset_id = l.id OR e.to_asset_id = l.id))
-        JOIN public.assets ip ON ip.id = (CASE WHEN e.from_asset_id = l.id THEN e.to_asset_id ELSE e.from_asset_id END)
-        WHERE ip.type='inspection_point' AND ip.is_current AND NOT ip.is_deleted
-        GROUP BY l.id
-      ),
-      test_results AS (
-        SELECT (tr.content->>'lot_asset_id')::uuid AS lot_id,
-               jsonb_agg(tr.content) AS test_results
-        FROM public.assets tr
-        WHERE tr.type='test_result' AND tr.is_current AND NOT tr.is_deleted
-          AND (tr.content->>'lot_asset_id') IS NOT NULL
-        GROUP BY (tr.content->>'lot_asset_id')::uuid
-      )
-      SELECT l.project_id,
-             l.organization_id,
-             l.id AS lot_asset_id,
-             l.asset_uid,
-             l.version,
-             l.name AS lot_name,
-             (l.content->>'lot_number') AS lot_number,
-             (l.content->>'status') AS lot_status,
-             l.approval_state,
-             (l.content->>'itp_document_asset_id') AS itp_document_asset_id,
-             COALESCE(hp_wp.inspection_points, '[]'::jsonb) AS inspection_points,
-             COALESCE(trs.test_results, '[]'::jsonb) AS test_results
-      FROM lot_assets l
-      LEFT JOIN hp_wp ON hp_wp.lot_id = l.id
-      LEFT JOIN test_results trs ON trs.lot_id = l.id
-    $$;
-  END IF;
-END$$;
+CREATE OR REPLACE VIEW public.work_lot_register AS
+WITH lot_assets AS (
+  SELECT a.* FROM public.assets a
+  WHERE a.type='lot' AND a.is_current AND NOT a.is_deleted
+),
+hp_wp AS (
+  SELECT l.id AS lot_id,
+         jsonb_agg(DISTINCT jsonb_build_object(
+           'inspection_point_id', ip.id,
+           'code', ip.content->>'code',
+           'title', ip.content->>'title',
+           'point_type', ip.content->>'point_type',
+           'sla_due_at', ip.content->>'sla_due_at',
+           'notified_at', ip.content->>'notified_at',
+           'released_at', ip.content->>'released_at',
+           'approval_state', ip.approval_state
+         )) AS inspection_points
+  FROM lot_assets l
+  JOIN public.asset_edges e ON (e.edge_type IN ('BLOCKED_BY','REFERENCES') AND (e.from_asset_id = l.id OR e.to_asset_id = l.id))
+  JOIN public.assets ip ON ip.id = (CASE WHEN e.from_asset_id = l.id THEN e.to_asset_id ELSE e.from_asset_id END)
+  WHERE ip.type='inspection_point' AND ip.is_current AND NOT ip.is_deleted
+  GROUP BY l.id
+),
+test_results AS (
+  SELECT (tr.content->>'lot_asset_id')::uuid AS lot_id,
+         jsonb_agg(tr.content) AS test_results
+  FROM public.assets tr
+  WHERE tr.type='test_result' AND tr.is_current AND NOT tr.is_deleted
+    AND (tr.content->>'lot_asset_id') IS NOT NULL
+  GROUP BY (tr.content->>'lot_asset_id')::uuid
+)
+SELECT l.project_id,
+       l.organization_id,
+       l.id AS lot_asset_id,
+       l.asset_uid,
+       l.version,
+       l.name AS lot_name,
+       (l.content->>'lot_number') AS lot_number,
+       (l.content->>'status') AS lot_status,
+       l.approval_state,
+       (l.content->>'itp_document_asset_id') AS itp_document_asset_id,
+       COALESCE(hp_wp.inspection_points, '[]'::jsonb) AS inspection_points,
+       COALESCE(trs.test_results, '[]'::jsonb) AS test_results
+FROM lot_assets l
+LEFT JOIN hp_wp ON hp_wp.lot_id = l.id
+LEFT JOIN test_results trs ON trs.lot_id = l.id;
 
 -- hold_witness_register
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_views WHERE viewname='hold_witness_register' AND schemaname='public'
-  ) THEN
-    EXECUTE $$
-      CREATE VIEW public.hold_witness_register AS
-      SELECT ip.project_id,
-             ip.organization_id,
-             ip.id AS inspection_point_id,
-             ip.asset_uid,
-             ip.version,
-             ip.name,
-             ip.approval_state,
-             ip.content->>'point_type' AS point_type,
-             ip.content->>'code' AS code,
-             ip.content->>'title' AS title,
-             ip.content->>'itp_item_ref' AS itp_item_ref,
-             ip.content->>'jurisdiction_rule_ref' AS jurisdiction_rule_ref,
-             ip.content->>'notified_at' AS notified_at,
-             ip.content->>'released_at' AS released_at,
-             ip.content->>'sla_due_at' AS sla_due_at
-      FROM public.assets ip
-      WHERE ip.type='inspection_point' AND ip.is_current AND NOT ip.is_deleted
-    $$;
-  END IF;
-END$$;
+CREATE OR REPLACE VIEW public.hold_witness_register AS
+SELECT ip.project_id,
+       ip.organization_id,
+       ip.id AS inspection_point_id,
+       ip.asset_uid,
+       ip.version,
+       ip.name,
+       ip.approval_state,
+       ip.content->>'point_type' AS point_type,
+       ip.content->>'code' AS code,
+       ip.content->>'title' AS title,
+       ip.content->>'itp_item_ref' AS itp_item_ref,
+       ip.content->>'jurisdiction_rule_ref' AS jurisdiction_rule_ref,
+       ip.content->>'notified_at' AS notified_at,
+       ip.content->>'released_at' AS released_at,
+       ip.content->>'sla_due_at' AS sla_due_at
+FROM public.assets ip
+WHERE ip.type='inspection_point' AND ip.is_current AND NOT ip.is_deleted;
 
 -- identified_records_register
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_views WHERE viewname='identified_records_register' AND schemaname='public'
-  ) THEN
-    EXECUTE $$
-      CREATE VIEW public.identified_records_register AS
-      SELECT a.organization_id,
-             a.project_id,
-             a.id AS asset_id,
-             a.name,
-             a.type,
-             a.subtype,
-             a.status,
-             a.approval_state,
-             a.content->'records_identified' AS records_identified
-      FROM public.assets a
-      WHERE a.type IN ('plan','itp_document','itp_template') AND a.is_current AND NOT a.is_deleted
-    $$;
-  END IF;
-END$$;
+CREATE OR REPLACE VIEW public.identified_records_register AS
+SELECT a.organization_id,
+       a.project_id,
+       a.id AS asset_id,
+       a.name,
+       a.type,
+       a.subtype,
+       a.status,
+       a.approval_state,
+       a.content->'records_identified' AS records_identified
+FROM public.assets a
+WHERE a.type IN ('plan','itp_document','itp_template') AND a.is_current AND NOT a.is_deleted;
 
 -- itp_register
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_views WHERE viewname='itp_register' AND schemaname='public'
-  ) THEN
-    EXECUTE $$
-      CREATE VIEW public.itp_register AS
-      SELECT itp.organization_id,
-             itp.project_id,
-             itp.id AS itp_asset_id,
-             itp.version,
-             itp.approval_state,
-             (SELECT jsonb_agg(jsonb_build_object('user_or_role', ap.to_asset_id, 'approved_at', ap.properties->>'approved_at'))
-                FROM public.asset_edges ap
-                WHERE ap.edge_type='APPROVED_BY' AND ap.from_asset_id=itp.id) AS approvals,
-             itp.content->>'jurisdiction_coverage_status' AS jurisdiction_coverage_status,
-             itp.content->>'required_points_present' AS required_points_present
-      FROM public.assets itp
-      WHERE itp.type IN ('itp_template','itp_document') AND itp.is_current AND NOT itp.is_deleted
-    $$;
-  END IF;
-END$$;
+CREATE OR REPLACE VIEW public.itp_register AS
+SELECT itp.organization_id,
+       itp.project_id,
+       itp.id AS itp_asset_id,
+       itp.version,
+       itp.approval_state,
+       (SELECT jsonb_agg(jsonb_build_object('user_or_role', ap.to_asset_id, 'approved_at', ap.properties->>'approved_at'))
+          FROM public.asset_edges ap
+          WHERE ap.edge_type='APPROVED_BY' AND ap.from_asset_id=itp.id) AS approvals,
+       itp.content->>'jurisdiction_coverage_status' AS jurisdiction_coverage_status,
+       itp.content->>'required_points_present' AS required_points_present
+FROM public.assets itp
+WHERE itp.type IN ('itp_template','itp_document') AND itp.is_current AND NOT itp.is_deleted;
 
 

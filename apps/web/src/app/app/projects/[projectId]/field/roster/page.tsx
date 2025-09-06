@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Users, Calendar, MapPin, Phone, Mail, User, Edit, Eye } from 'lucide-react'
 
@@ -36,11 +36,7 @@ export default function RosterPage() {
   const [selectedEntry, setSelectedEntry] = useState<RosterEntry | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchRoster()
-  }, [projectId, selectedDate])
-
-  const fetchRoster = async () => {
+  const fetchRoster = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/field/roster?date=${selectedDate}`)
       if (response.ok) {
@@ -52,7 +48,11 @@ export default function RosterPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId, selectedDate])
+
+  useEffect(() => {
+    fetchRoster()
+  }, [fetchRoster])
 
   const filteredRoster = selectedLocation === 'all'
     ? roster

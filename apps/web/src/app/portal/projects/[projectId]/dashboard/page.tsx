@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 
 interface PageProps {
-	params: { projectId: string }
+	params: Promise<{ projectId: string }>
 }
 
 // Mock project data - in real implementation, this would be fetched
@@ -16,8 +16,9 @@ const getProject = (id: string) => ({
 	pendingApprovals: 2
 })
 
-export default function ClientDashboardPage({ params }: PageProps) {
-	const project = getProject(params.projectId)
+export default async function ClientDashboardPage({ params }: PageProps) {
+	const { projectId } = await params
+	const project = getProject(projectId)
 	if (!project) notFound()
 
 	return (

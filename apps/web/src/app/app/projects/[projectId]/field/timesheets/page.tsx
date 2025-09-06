@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Clock, Calendar, User, CheckCircle, AlertCircle, Edit, Eye, Download } from 'lucide-react'
 
@@ -40,11 +40,7 @@ export default function TimesheetsPage() {
   const [selectedTimesheet, setSelectedTimesheet] = useState<TimesheetEntry | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchTimesheets()
-  }, [projectId, selectedWeek])
-
-  const fetchTimesheets = async () => {
+  const fetchTimesheets = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/field/timesheets?week=${selectedWeek}`)
       if (response.ok) {
@@ -56,7 +52,11 @@ export default function TimesheetsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId, selectedWeek])
+
+  useEffect(() => {
+    fetchTimesheets()
+  }, [fetchTimesheets])
 
   const getWeekRange = (startDate: string) => {
     const start = new Date(startDate)

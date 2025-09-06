@@ -1,5 +1,6 @@
 import { query } from '@/lib/db'
 import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { RelationshipEdgeType } from '@/types/graph'
 
 export async function createTestRequest(input: {
 	project_id: string
@@ -20,13 +21,13 @@ export async function createTestRequest(input: {
 			{
 				from_asset_id: '',
 				to_asset_id: input.lot_asset_id,
-				edge_type: 'EVIDENCES',
+				edge_type: 'EVIDENCES' as RelationshipEdgeType,
 				properties: { source: 'test_request', timestamp: new Date().toISOString() }
 			},
 			...(input.lab_asset_id ? [{
 				from_asset_id: '',
 				to_asset_id: input.lab_asset_id,
-				edge_type: 'RELATED_TO'
+				edge_type: 'RELATED_TO' as RelationshipEdgeType
 			}] : [])
 		],
 		idempotency_key: `test_request:${input.project_id}:${input.lot_asset_id}:${input.test_method_code}`
@@ -52,7 +53,7 @@ export async function registerSample(input: {
 		edges: [{
 			from_asset_id: '',
 			to_asset_id: input.test_request_asset_id,
-			edge_type: 'INPUT_TO'
+			edge_type: 'INPUT_TO' as RelationshipEdgeType
 		}],
 		idempotency_key: `sample:${input.project_id}:${input.sample_id}`
 	}
@@ -87,17 +88,17 @@ export async function importLabResults(input: {
 			{
 				from_asset_id: '',
 				to_asset_id: input.test_request_asset_id,
-				edge_type: 'OUTPUT_OF'
+				edge_type: 'OUTPUT_OF' as RelationshipEdgeType
 			},
 			{
 				from_asset_id: '',
 				to_asset_id: input.sample_asset_id,
-				edge_type: 'GENERATED_FROM'
+				edge_type: 'GENERATED_FROM' as RelationshipEdgeType
 			},
 			{
 				from_asset_id: '',
 				to_asset_id: input.lab_asset_id,
-				edge_type: 'EVIDENCES',
+				edge_type: 'EVIDENCES' as RelationshipEdgeType,
 				properties: { source: 'lab_result', timestamp: new Date().toISOString() }
 			}
 		],

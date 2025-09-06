@@ -1,83 +1,40 @@
-import { NextRequest } from 'next/server'
-import { query } from '@/lib/db'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { pool } from '@/lib/db'
 
-export async function GET(request: NextRequest, { params }: { params: { projectId: string } }) {
-  const { projectId } = params
-
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
   try {
-    // Get ITP register
-    const itpRegister = await query(`
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { projectId } = await params
+
+    // Check access
+    const accessCheck = await pool.query(`
+      SELECT 1 FROM public.projects p
+      JOIN public.organization_users ou ON ou.organization_id = p.organization_id
+      WHERE p.id = $1 AND ou.user_id = $2
+    `, [projectId, (session.user as any).id])
+
+    if (accessCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Get ITP register from view
+    const result = await pool.query(`
       SELECT * FROM public.itp_register
       WHERE project_id = $1
-      ORDER BY created_at DESC
+      ORDER BY itp_asset_id
     `, [projectId])
 
-    return Response.json({ data: itpRegister.rows })
+    return NextResponse.json({ data: result.rows })
   } catch (error) {
-    console.error('ITP register API error:', error)
-    return new Response('Internal server error', { status: 500 })
-  }
-}
-
-export async function POST(request: NextRequest, { params }: { params: { projectId: string } }) {
-  const { projectId } = params
-  const body = await request.json()
-  const action = body.action
-
-  try {
-    if (action === 'endorse_itp') {
-      // NSW-specific ITP endorsement
-      const endorsement = {
-        itp_asset_id: body.itp_asset_id,
-        endorsed_by: body.endorsed_by,
-        role_at_endorsement: body.role_at_endorsement,
-        endorsed_at: new Date().toISOString(),
-        endorsement_notes: body.endorsement_notes
-      }
-
-      // Update ITP asset with endorsement
-      await query(`
-        UPDATE public.assets
-        SET content = content || $2::jsonb,
-            approval_state = 'approved'
-        WHERE id = $1 AND type IN ('itp_template', 'itp_document')
-      `, [body.itp_asset_id, JSON.stringify(endorsement)])
-
-      return Response.json({ success: true, endorsement })
-    }
-
-    if (action === 'check_coverage') {
-      // Check ITP coverage against jurisdiction requirements
-      const coverage = await query(`
-        SELECT
-          itp.id,
-          itp.content->>'jurisdiction_coverage_status' as coverage_status,
-          itp.content->>'required_points_present' as required_points_present,
-          COUNT(ip.id) as inspection_points_count
-        FROM public.assets itp
-        LEFT JOIN public.asset_edges e ON e.from_asset_id = itp.id AND e.edge_type = 'PARENT_OF'
-        LEFT JOIN public.assets ip ON ip.id = e.to_asset_id AND ip.type = 'inspection_point'
-        WHERE itp.id = $1 AND itp.type IN ('itp_template', 'itp_document')
-        GROUP BY itp.id, itp.content
-      `, [body.itp_asset_id])
-
-      const result = coverage.rows[0]
-      const isComplete = result?.coverage_status === 'complete' &&
-                        result?.required_points_present === 'true' &&
-                        (result?.inspection_points_count || 0) > 0
-
-      return Response.json({
-        itp_asset_id: body.itp_asset_id,
-        coverage_status: result?.coverage_status || 'unknown',
-        required_points_present: result?.required_points_present || false,
-        inspection_points_count: result?.inspection_points_count || 0,
-        is_complete: isComplete
-      })
-    }
-
-    return new Response('Invalid action', { status: 400 })
-  } catch (error) {
-    console.error('ITP register POST error:', error)
-    return new Response('Internal server error', { status: 500 })
+    console.error('Error fetching ITP register:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

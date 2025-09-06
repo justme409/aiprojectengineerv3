@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Save, FileText, Edit, Trash2, Eye, Download, Upload, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -64,13 +64,7 @@ export default function ItpTemplateEditorEnhanced({
   const [editingItem, setEditingItem] = useState<ITPItem | null>(null)
   const [showItemForm, setShowItemForm] = useState(false)
 
-  useEffect(() => {
-    if (templateId) {
-      fetchTemplate()
-    }
-  }, [templateId])
-
-  const fetchTemplate = async () => {
+  const fetchTemplate = useCallback(async () => {
     try {
       // In a real implementation, this would fetch from API
       // For now, using mock data
@@ -115,7 +109,13 @@ export default function ItpTemplateEditorEnhanced({
     } finally {
       setLoading(false)
     }
-  }
+  }, [templateId])
+
+  useEffect(() => {
+    if (templateId) {
+      fetchTemplate()
+    }
+  }, [fetchTemplate, templateId])
 
   const handleSave = async () => {
     try {

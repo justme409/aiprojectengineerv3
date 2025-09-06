@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Beaker, CheckCircle, AlertTriangle, Clock, Eye, Edit, Download, FileText } from 'lucide-react'
 
@@ -45,11 +45,7 @@ export default function MixDesignsPage() {
   const [selectedMixDesign, setSelectedMixDesign] = useState<MixDesign | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchMixDesigns()
-  }, [projectId])
-
-  const fetchMixDesigns = async () => {
+  const fetchMixDesigns = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/mix-designs`)
       if (response.ok) {
@@ -61,7 +57,11 @@ export default function MixDesignsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchMixDesigns()
+  }, [fetchMixDesigns])
 
   const filteredMixDesigns = mixDesigns.filter(design => {
     const matchesSearch = design.mix_design_code.toLowerCase().includes(searchTerm.toLowerCase()) ||

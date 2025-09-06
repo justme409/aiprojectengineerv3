@@ -1,127 +1,213 @@
-import { query } from '@/lib/db'
+'use server'
+
+import { pool } from '@/lib/db'
 import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
 
-export async function createRMP(projectId: string, rmpData: any) {
-  const result = await upsertAssetsAndEdges({
-    asset: {
-      type: 'plan',
-      subtype: 'records_management_plan',
-      name: rmpData.title,
+export async function createRMP(formData: FormData) {
+  try {
+    const projectId = formData.get('projectId') as string
+    const title = formData.get('title') as string
+    const jurisdiction = formData.get('jurisdiction') as string
+    const identifiedRecords = JSON.parse(formData.get('identifiedRecords') as string)
+
+    const spec = {
+      asset: {
+        type: 'plan',
+        subtype: 'records_management_plan',
+        name: title,
+        project_id: projectId,
+        content: {
+          plan_type: 'rmp',
+          jurisdiction,
+          identified_records: identifiedRecords,
+          created_at: new Date().toISOString(),
+          version: '1.0'
+        },
+        status: 'draft'
+      },
+      edges: [],
+      idempotency_key: `rmp:${title}:${projectId}`,
+      audit_context: { action: 'create_rmp', user_id: 'system' }
+    }
+
+    const result = await upsertAssetsAndEdges(spec)
+    return { success: true, rmpId: result.id }
+  } catch (error) {
+    console.error('Error creating RMP:', error)
+    return { success: false, error: 'Failed to create RMP' }
+  }
+}
+
+export async function updateIdentifiedRecordsList(formData: FormData) {
+  try {
+    const rmpId = formData.get('rmpId') as string
+    const identifiedRecords = JSON.parse(formData.get('identifiedRecords') as string)
+
+    const spec = {
+      asset: {
+        id: rmpId,
+        content: {
+          identified_records: identifiedRecords,
+          last_updated: new Date().toISOString()
+        }
+      },
+      edges: [],
+      idempotency_key: `update_records_list:${rmpId}`,
+      audit_context: { action: 'update_identified_records', user_id: 'system' }
+    }
+
+    await upsertAssetsAndEdges(spec)
+    return { success: true }
+  } catch (error) {
+    console.error('Error updating identified records:', error)
+    return { success: false, error: 'Failed to update records' }
+  }
+}
+
+export async function markDelivered(formData: FormData) {
+  try {
+    const recordId = formData.get('recordId') as string
+    const deliveredBy = formData.get('deliveredBy') as string
+    const deliveryNotes = formData.get('deliveryNotes') as string
+
+    const spec = {
+      asset: {
+        id: recordId,
+        content: {
+          delivered_at: new Date().toISOString(),
+          delivered_by: deliveredBy,
+          delivery_notes: deliveryNotes,
+          status: 'delivered'
+        },
+        status: 'completed'
+      },
+      edges: [],
+      idempotency_key: `mark_delivered:${recordId}`,
+      audit_context: { action: 'mark_record_delivered', user_id: 'system' }
+    }
+
+    await upsertAssetsAndEdges(spec)
+    return { success: true }
+  } catch (error) {
+    console.error('Error marking record as delivered:', error)
+    return { success: false, error: 'Failed to mark record as delivered' }
+  }
+}
+
+export async function exportRMPStatus(formData: FormData) {
+  try {
+    const rmpId = formData.get('rmpId') as string
+    const projectId = formData.get('projectId') as string
+
+    // Get RMP with all records
+    const rmpResult = await pool.query(`
+      SELECT a.* FROM public.asset_heads a
+      WHERE a.id = $1 AND a.project_id = $2
+    `, [rmpId, projectId])
+
+    if (rmpResult.rows.length === 0) {
+      return { success: false, error: 'RMP not found' }
+    }
+
+    const rmp = rmpResult.rows[0]
+
+    // Get delivery status for all identified records
+    const records = rmp.content.identified_records || []
+    const deliveredCount = records.filter((record: any) => record.delivered_at).length
+    const totalCount = records.length
+    const completionPercentage = totalCount > 0 ? (deliveredCount / totalCount) * 100 : 0
+
+    const exportData = {
+      rmp_id: rmpId,
+      rmp_title: rmp.name,
       project_id: projectId,
-      content: {
-        title: rmpData.title,
-        scope: rmpData.scope,
-        records_schedule: rmpData.records_schedule,
-        retention_periods: rmpData.retention_periods,
-        disposal_methods: rmpData.disposal_methods,
-        jurisdiction_requirements: rmpData.jurisdiction_requirements,
-        created_by: rmpData.created_by
-      }
-    },
-    idempotency_key: `rmp:${projectId}:${rmpData.title.toLowerCase().replace(/\s+/g, '_')}`
-  })
+      jurisdiction: rmp.content.jurisdiction,
+      total_records: totalCount,
+      delivered_records: deliveredCount,
+      completion_percentage: completionPercentage,
+      export_date: new Date().toISOString(),
+      records_status: records.map((record: any) => ({
+        id: record.id,
+        name: record.name,
+        type: record.type,
+        delivered: !!record.delivered_at,
+        delivered_at: record.delivered_at,
+        delivered_by: record.delivered_by
+      }))
+    }
 
-  return result
-}
-
-export async function updateIdentifiedRecordsList(projectId: string, assetId: string, recordsData: any) {
-  const result = await upsertAssetsAndEdges({
-    asset: {
-      id: assetId,
-      content: {
-        records_identified: recordsData.records,
-        last_updated: new Date().toISOString(),
-        updated_by: recordsData.updated_by
-      }
-    },
-    idempotency_key: `update_records:${assetId}`
-  })
-
-  return result
-}
-
-export async function markDelivered(projectId: string, assetId: string, deliveryData: any) {
-  const result = await upsertAssetsAndEdges({
-    asset: {
-      type: 'record',
-      name: `Records Delivery - ${deliveryData.records_type}`,
-      project_id: projectId,
-      content: {
-        asset_id: assetId,
-        delivered_at: new Date().toISOString(),
-        delivered_to: deliveryData.delivered_to,
-        delivery_method: deliveryData.delivery_method,
-        delivery_reference: deliveryData.delivery_reference,
-        records_type: deliveryData.records_type,
-        delivery_notes: deliveryData.notes
-      }
-    },
-    idempotency_key: `records_delivery:${projectId}:${assetId}`
-  })
-
-  // Update the original asset to mark as delivered
-  await upsertAssetsAndEdges({
-    asset: {
-      id: assetId,
-      content: {
-        records_delivered: true,
-        delivered_at: new Date().toISOString(),
-        delivery_reference: deliveryData.delivery_reference
-      }
-    },
-    idempotency_key: `mark_delivered:${assetId}`
-  })
-
-  return result
-}
-
-export async function exportRMPStatus(projectId: string) {
-  const records = await query(`
-    SELECT * FROM public.identified_records_register
-    WHERE project_id = $1
-    ORDER BY created_at DESC
-  `, [projectId])
-
-  // In a real implementation, this would generate a PDF report
-  return {
-    data: records.rows,
-    filename: `rmp_status_${projectId}_${new Date().toISOString().split('T')[0]}.json`
+    return { success: true, exportData }
+  } catch (error) {
+    console.error('Error exporting RMP status:', error)
+    return { success: false, error: 'Failed to export RMP status' }
   }
 }
 
-export async function getIdentifiedRecordsRegister(projectId: string) {
-  const records = await query(`
-    SELECT * FROM public.identified_records_register
-    WHERE project_id = $1
-    ORDER BY created_at DESC
-  `, [projectId])
+export async function validateRMPCompliance(rmpId: string, jurisdiction: string) {
+  try {
+    const rmpResult = await pool.query(`
+      SELECT a.* FROM public.asset_heads a
+      WHERE a.id = $1
+    `, [rmpId])
 
-  return records.rows
-}
+    if (rmpResult.rows.length === 0) {
+      return { success: false, error: 'RMP not found' }
+    }
 
-export async function validateRecordsDelivery(projectId: string, assetId: string) {
-  // Check if records delivery meets compliance requirements
-  const asset = await query(`
-    SELECT * FROM public.assets
-    WHERE id = $1 AND project_id = $2 AND is_current AND NOT is_deleted
-  `, [assetId, projectId])
+    const rmp = rmpResult.rows[0]
+    const records = rmp.content.identified_records || []
 
-  if (asset.rows.length === 0) {
-    throw new Error('Asset not found')
+    // Jurisdiction-specific validation rules
+    const validationRules = {
+      NSW: {
+        required_records: ['quality_records', 'test_results', 'inspection_reports'],
+        minimum_completion: 95
+      },
+      QLD: {
+        required_records: ['lot_register', 'conformance_reports', 'as_constructed'],
+        minimum_completion: 100
+      },
+      VIC: {
+        required_records: ['quality_records', 'compliance_reports'],
+        minimum_completion: 90
+      }
+    }
+
+    const rules = validationRules[jurisdiction as keyof typeof validationRules] || validationRules.NSW
+    const deliveredCount = records.filter((record: any) => record.delivered_at).length
+    const completionPercentage = records.length > 0 ? (deliveredCount / records.length) * 100 : 0
+
+    const requiredRecordsPresent = rules.required_records.every((requiredType: string) =>
+      records.some((record: any) => record.type === requiredType)
+    )
+
+    const validationResult: {
+      compliant: boolean
+      completion_percentage: number
+      required_records_present: boolean
+      missing_records: string[]
+      recommendations: string[]
+    } = {
+      compliant: completionPercentage >= (rules.minimum_completion as number) && requiredRecordsPresent,
+      completion_percentage: completionPercentage,
+      required_records_present: requiredRecordsPresent,
+      missing_records: (rules.required_records as string[]).filter((requiredType: string) =>
+        !records.some((record: any) => record.type === requiredType)
+      ),
+      recommendations: [] as string[]
+    }
+
+    if (completionPercentage < rules.minimum_completion) {
+      validationResult.recommendations.push(`Complete ${rules.minimum_completion - completionPercentage}% more records`)
+    }
+
+    if (!requiredRecordsPresent) {
+      validationResult.recommendations.push('Add missing required record types')
+    }
+
+    return { success: true, validation: validationResult }
+  } catch (error) {
+    console.error('Error validating RMP compliance:', error)
+    return { success: false, error: 'Failed to validate RMP compliance' }
   }
-
-  const record = asset.rows[0]
-  const recordsIdentified = record.content?.records_identified || []
-  const recordsDelivered = record.content?.records_delivered || false
-
-  // Basic validation - in a real implementation, this would be more sophisticated
-  const validation = {
-    asset_id: assetId,
-    records_identified_count: recordsIdentified.length,
-    records_delivered: recordsDelivered,
-    compliance_status: recordsDelivered ? 'compliant' : 'pending',
-    validation_date: new Date().toISOString()
-  }
-
-  return validation
 }

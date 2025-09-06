@@ -67,29 +67,32 @@ pnpm db:migrate
 # Install all dependencies
 pnpm install
 
-# Install Python dependencies
-cd services/langgraph_server_v10
-pip install -r requirements.txt
+# Install Python dependencies for LangGraph (automatic via venv)
+# Dependencies are already installed in the langgraphv10 venv
 ```
 
 ### 4. Start Services
 ```bash
-# Terminal 1: Next.js App
-cd apps/web
+# Option 1: Start LangGraph (new official setup)
 pnpm dev
+# OR
+./start-langgraph.sh
 
-# Terminal 2: LangGraph Service
-cd services/langgraph_server_v10
-uvicorn server.app:app --reload --port 8777
+# Option 2: Start Web App only
+pnpm web-dev
 
-# Terminal 3: Database (if not using Docker)
-# Make sure PostgreSQL is running
+# Option 3: Start LangGraph independently
+pnpm langgraph
+
+# Option 4: Start with Docker
+docker-compose up -d
 ```
 
 ### 5. Access Application
 - **Web App**: http://localhost:3000
 - **Login**: Create account automatically with any email/password
-- **LangGraph API**: http://localhost:8777/docs
+- **LangGraph API**: http://localhost:2024/docs
+- **LangGraph Studio**: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 
 ## 📁 Project Structure
 
@@ -112,12 +115,18 @@ projectpro/
 │   │   └── types/                     # TypeScript definitions
 │   ├── prisma/                        # NextAuth schema
 │   └── package.json
-├── services/langgraph_server_v10/     # AI Orchestration Service
-│   ├── graphs/                        # LangGraph workflows
-│   ├── prompts/                       # AI prompts
-│   └── server/
-│       ├── app.py                     # FastAPI application
-│       └── requirements.txt
+├── services/
+│   ├── langgraph_server_v10/         # Legacy AI Orchestration (FastAPI)
+│   │   ├── graphs/                    # Custom LangGraph workflows
+│   │   └── server/
+│   │       ├── app.py                 # FastAPI application
+│   │       └── requirements.txt
+│   └── langgraphv10/                  # Official LangGraph Service
+│       ├── langgraph_env/             # Python 3.11 venv
+│       ├── src/agent/graph.py         # Official LangGraph workflows
+│       ├── langgraph.json             # Configuration
+│       ├── .env                       # Environment variables
+│       └── pyproject.toml             # Project dependencies
 ├── db/migrations/                     # Database migrations
 └── docker-compose.yml                 # Docker setup
 ```
@@ -187,6 +196,12 @@ Pre-configured compliance packs for major Australian jurisdictions:
 - `GET /api/v1/projects/[id]/ai/streams` - Processing status (SSE)
 - `POST /api/v1/projects/[id]/ai/status` - Check processing status
 - `POST /api/v1/projects/[id]/uploads/complete` - Trigger AI processing
+
+### LangGraph Scripts
+- `pnpm dev` - Start LangGraph server (default)
+- `pnpm langgraph` - Start LangGraph server independently
+- `pnpm web-dev` - Start Next.js web app only
+- `./start-langgraph.sh` - Standalone LangGraph startup script
 
 ### External Services
 - `POST /api/v1/gis` - GIS/geo features management

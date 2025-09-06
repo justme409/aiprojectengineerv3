@@ -4,15 +4,16 @@ import { query } from '@/lib/db'
 import WorkLotRegister from '@/components/features/quality/WorkLotRegister'
 
 interface PageProps {
-	params: { projectId: string }
+	params: Promise<{ projectId: string }>
 }
 
 export default async function WorkLotsPage({ params }: PageProps) {
-	const project = await getProjectById(params.projectId)
+	const { projectId } = await params
+	const project = await getProjectById(projectId)
 	if (!project) notFound()
 
 	// Get work lot register data from view
-	const { rows } = await query('SELECT * FROM public.work_lot_register WHERE project_id=$1 ORDER BY lot_number', [params.projectId])
+	const { rows } = await query('SELECT * FROM public.work_lot_register WHERE project_id=$1 ORDER BY lot_number', [projectId])
 
 	return (
 		<main className="p-6">
@@ -21,7 +22,7 @@ export default async function WorkLotsPage({ params }: PageProps) {
 				<p className="text-gray-600">Quality management work lots with HP/WP tracking</p>
 			</div>
 
-			<WorkLotRegister lots={rows} projectId={params.projectId} />
+			<WorkLotRegister projectId={projectId} />
 		</main>
 	)
 }

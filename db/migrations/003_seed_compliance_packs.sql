@@ -6,10 +6,17 @@ DECLARE
     sa_pack_id uuid := gen_random_uuid();
     tas_pack_id uuid := gen_random_uuid();
     vic_pack_id uuid := gen_random_uuid();
+    org_id uuid;
 BEGIN
+    -- Ensure we have an organization_id
+    SELECT id INTO org_id FROM public.organizations LIMIT 1;
+    IF org_id IS NULL THEN
+        RAISE EXCEPTION 'No organization found for seeding compliance packs';
+    END IF;
+
     -- NSW Q6
-    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, status, classification, idempotency_key, content)
-    VALUES (nsw_pack_id, nsw_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'NSW Q6 Compliance Pack (2024.02)', 'approved', 'internal', 'seed:pack:NSW_Q6_2024_02',
+    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, organization_id, status, classification, idempotency_key, content)
+    VALUES (nsw_pack_id, nsw_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'NSW Q6 Compliance Pack (2024.02)', org_id, 'approved', 'internal', 'seed:pack:NSW_Q6_2024_02',
         jsonb_build_object(
             'jurisdiction', 'NSW',
             'agency', 'TfNSW',
@@ -33,8 +40,8 @@ BEGIN
         ));
 
     -- QLD MRTS50
-    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, status, classification, idempotency_key, content)
-    VALUES (qld_pack_id, qld_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'QLD MRTS50 Compliance Pack (2025.03)', 'approved', 'internal', 'seed:pack:QLD_MRTS50_2025_03',
+    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, organization_id, status, classification, idempotency_key, content)
+    VALUES (qld_pack_id, qld_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'QLD MRTS50 Compliance Pack (2025.03)', org_id, 'approved', 'internal', 'seed:pack:QLD_MRTS50_2025_03',
         jsonb_build_object(
             'jurisdiction', 'QLD',
             'agency', 'TMR',
@@ -58,8 +65,8 @@ BEGIN
         ));
 
     -- SA PC-QA2
-    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, status, classification, idempotency_key, content)
-    VALUES (sa_pack_id, sa_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'SA PC-QA2 Compliance Pack (2024.09)', 'approved', 'internal', 'seed:pack:SA_PCQA2_2024_09',
+    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, organization_id, status, classification, idempotency_key, content)
+    VALUES (sa_pack_id, sa_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'SA PC-QA2 Compliance Pack (2024.09)', org_id, 'approved', 'internal', 'seed:pack:SA_PCQA2_2024_09',
         jsonb_build_object(
             'jurisdiction', 'SA',
             'agency', 'DIT',
@@ -78,8 +85,8 @@ BEGIN
         ));
 
     -- TAS Section 160
-    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, status, classification, idempotency_key, content)
-    VALUES (tas_pack_id, tas_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'TAS Section 160 Compliance Pack (2025.06)', 'approved', 'internal', 'seed:pack:TAS_SEC160_2025_06',
+    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, organization_id, status, classification, idempotency_key, content)
+    VALUES (tas_pack_id, tas_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'TAS Section 160 Compliance Pack (2025.06)', org_id, 'approved', 'internal', 'seed:pack:TAS_SEC160_2025_06',
         jsonb_build_object(
             'jurisdiction', 'TAS',
             'agency', 'DSG',
@@ -97,8 +104,8 @@ BEGIN
         ));
 
     -- VIC Section 160 MW
-    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, status, classification, idempotency_key, content)
-    VALUES (vic_pack_id, vic_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'VIC Section 160 MW Compliance Pack (2018.11)', 'approved', 'internal', 'seed:pack:VIC_SEC160_MW_2018_11',
+    INSERT INTO public.assets (id, asset_uid, version, is_current, type, subtype, name, organization_id, status, classification, idempotency_key, content)
+    VALUES (vic_pack_id, vic_pack_id, 1, true, 'compliance_pack', 'compliance_pack', 'VIC Section 160 MW Compliance Pack (2018.11)', org_id, 'approved', 'internal', 'seed:pack:VIC_SEC160_MW_2018_11',
         jsonb_build_object(
             'jurisdiction', 'VIC',
             'agency', 'DoT/VicRoads',

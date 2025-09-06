@@ -1,125 +1,94 @@
-import { NextRequest } from 'next/server'
-import { query } from '@/lib/db'
-import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { pool } from '@/lib/db'
 
-export async function GET(request: NextRequest, { params }: { params: { projectId: string } }) {
-  const { projectId } = params
-
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
   try {
-    // Get hold & witness register
-    const register = await query(`
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { projectId } = await params
+
+    // Check access
+    const accessCheck = await pool.query(`
+      SELECT 1 FROM public.projects p
+      JOIN public.organization_users ou ON ou.organization_id = p.organization_id
+      WHERE p.id = $1 AND ou.user_id = $2
+    `, [projectId, (session.user as any).id])
+
+    if (accessCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Get hold/witness register from view
+    const result = await pool.query(`
       SELECT * FROM public.hold_witness_register
       WHERE project_id = $1
       ORDER BY sla_due_at ASC
     `, [projectId])
 
-    return Response.json({ data: register.rows })
+    return NextResponse.json({ inspection_points: result.rows })
   } catch (error) {
-    console.error('Hold-witness API error:', error)
-    return new Response('Internal server error', { status: 500 })
+    console.error('Error fetching hold/witness register:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { projectId: string } }) {
-  const { projectId } = params
-  const body = await request.json()
-  const action = body.action
-
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
   try {
-    if (action === 'create_inspection_point') {
-      // Create a new inspection point (HP/WP)
-      const result = await upsertAssetsAndEdges({
-        asset: {
-          type: 'inspection_point',
-          name: body.title,
-          project_id: projectId,
-          content: {
-            code: body.code,
-            title: body.title,
-            point_type: body.point_type, // 'hold' or 'witness'
-            itp_item_ref: body.itp_item_ref,
-            jurisdiction_rule_ref: body.jurisdiction_rule_ref,
-            sla_due_at: body.sla_due_at,
-            notified_at: null,
-            released_at: null,
-            status: 'pending'
-          }
-        },
-        idempotency_key: `inspection_point:${projectId}:${body.code}`
-      })
-
-      return Response.json(result)
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (action === 'notify_witness') {
-      // Notify witness point
-      const result = await upsertAssetsAndEdges({
-        asset: {
-          id: body.inspection_point_id,
-          content: {
-            notified_at: new Date().toISOString(),
-            status: 'notified'
-          }
-        },
-        idempotency_key: `notify_witness:${body.inspection_point_id}`
-      })
+    const { projectId } = await params
+    const body = await request.json()
+    const { action, inspectionPointId } = body
 
-      return Response.json(result)
-    }
+    if (action === 'notify') {
+      // Notify witness
+      await pool.query(`
+        UPDATE public.assets
+        SET content = jsonb_set(content, '{notified_at}', $1::jsonb),
+            updated_at = now(), updated_by = $2
+        WHERE id = $3
+      `, [JSON.stringify(new Date().toISOString()), (session.user as any).id, inspectionPointId])
 
-    if (action === 'release_hold_point') {
+      return NextResponse.json({ message: 'Witness notified' })
+    } else if (action === 'release') {
       // Release hold point
-      const result = await upsertAssetsAndEdges({
-        asset: {
-          id: body.inspection_point_id,
-          content: {
-            released_at: new Date().toISOString(),
-            status: 'released',
-            release_notes: body.release_notes
-          }
-        },
-        idempotency_key: `release_hold:${body.inspection_point_id}`
-      })
+      await pool.query(`
+        UPDATE public.assets
+        SET content = jsonb_set(content, '{released_at}', $1::jsonb),
+            status = 'approved',
+            updated_at = now(), updated_by = $2
+        WHERE id = $3
+      `, [JSON.stringify(new Date().toISOString()), (session.user as any).id, inspectionPointId])
 
-      return Response.json(result)
-    }
-
-    if (action === 'reject_hold_point') {
+      return NextResponse.json({ message: 'Hold point released' })
+    } else if (action === 'reject') {
       // Reject hold point
-      const result = await upsertAssetsAndEdges({
-        asset: {
-          id: body.inspection_point_id,
-          content: {
-            rejected_at: new Date().toISOString(),
-            status: 'rejected',
-            rejection_reason: body.rejection_reason
-          }
-        },
-        idempotency_key: `reject_hold:${body.inspection_point_id}`
-      })
+      await pool.query(`
+        UPDATE public.assets
+        SET status = 'rejected',
+            updated_at = now(), updated_by = $1
+        WHERE id = $2
+      `, [(session.user as any).id, inspectionPointId])
 
-      return Response.json(result)
+      return NextResponse.json({ message: 'Hold point rejected' })
     }
 
-    if (action === 'set_sla') {
-      // Set SLA for inspection point
-      const result = await upsertAssetsAndEdges({
-        asset: {
-          id: body.inspection_point_id,
-          content: {
-            sla_due_at: body.sla_due_at,
-            sla_hours: body.sla_hours
-          }
-        },
-        idempotency_key: `set_sla:${body.inspection_point_id}`
-      })
-
-      return Response.json(result)
-    }
-
-    return new Response('Invalid action', { status: 400 })
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
-    console.error('Hold-witness POST error:', error)
-    return new Response('Internal server error', { status: 500 })
+    console.error('Error processing hold/witness action:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

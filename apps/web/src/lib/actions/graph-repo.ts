@@ -22,7 +22,7 @@ function applyClassificationDefaults(asset: any) {
 	}
 }
 
-const allowedFromTo: Array<{ edge_type: RelationshipEdgeType, from: string[] | ['*'], to: string[] | ['*'], required_properties?: string[] }> = [
+const allowedFromTo: Array<{ edge_type: RelationshipEdgeType, from: string[], to: string[], required_properties?: string[] }> = [
 	{ edge_type: 'PARENT_OF', from: ['wbs_node','lbs_node','document','itp_document','plan'], to: ['wbs_node','lbs_node','document','inspection_point','plan'] },
 	{ edge_type: 'BELONGS_TO_PROJECT', from: ['*'], to: ['project'] },
 	{ edge_type: 'MAPPED_TO', from: ['wbs_node'], to: ['lbs_node'], required_properties: ['strength','rationale'] },
@@ -42,8 +42,8 @@ const allowedFromTo: Array<{ edge_type: RelationshipEdgeType, from: string[] | [
 	{ edge_type: 'REFERENCES', from: ['correspondence','rfi','inspection_point','document'], to: ['drawing','spec','itp_document','document','itp_template'], required_properties: ['reference_type'] },
 ]
 
-function isTypeAllowed(list: string[] | ['*'], type: string): boolean {
-	return list[0] === '*' || list.includes(type)
+function isTypeAllowed(list: string[], type: string): boolean {
+	return list.includes('*') || list.includes(type)
 }
 
 function enforceAllowedFromTo(edge: EdgeSpec, fromType: string, toType: string) {

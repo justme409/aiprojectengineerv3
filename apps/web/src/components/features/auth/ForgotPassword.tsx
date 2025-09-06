@@ -46,7 +46,7 @@ export function ForgotPassword({ onResetSent }: ForgotPasswordProps) {
           </div>
           <CardTitle>Check your email</CardTitle>
           <CardDescription>
-            We've sent a password reset link to <strong>{email}</strong>
+            We&apos;ve sent a password reset link to <strong>{email}</strong>
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center space-y-4">
@@ -78,7 +78,7 @@ export function ForgotPassword({ onResetSent }: ForgotPasswordProps) {
       <CardHeader className="text-center">
         <CardTitle>Reset your password</CardTitle>
         <CardDescription>
-          Enter your email address and we'll send you a reset link
+          Enter your email address and we&apos;ll send you a reset link
         </CardDescription>
       </CardHeader>
       <CardContent>

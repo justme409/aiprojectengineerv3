@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,11 +33,7 @@ export default function ITPRegisterPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [action, setAction] = useState('')
 
-  useEffect(() => {
-    fetchITPItems()
-  }, [projectId])
-
-  const fetchITPItems = async () => {
+  const fetchITPItems = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/quality/itp`)
       const data = await response.json()
@@ -47,7 +43,11 @@ export default function ITPRegisterPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchITPItems()
+  }, [fetchITPItems])
 
   const handleAction = async (item: ITPItem, actionType: string) => {
     setSelectedItem(item)

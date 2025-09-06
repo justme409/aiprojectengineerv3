@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -34,11 +34,7 @@ export default function RecordsHandoverPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [action, setAction] = useState('')
 
-  useEffect(() => {
-    fetchRecordItems()
-  }, [projectId])
-
-  const fetchRecordItems = async () => {
+  const fetchRecordItems = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/quality/records`)
       const data = await response.json()
@@ -48,7 +44,11 @@ export default function RecordsHandoverPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchRecordItems()
+  }, [fetchRecordItems])
 
   const handleAction = async (item: RecordItem, actionType: string) => {
     setSelectedItem(item)

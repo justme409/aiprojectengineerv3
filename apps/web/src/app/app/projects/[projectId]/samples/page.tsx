@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Flask, MapPin, Calendar, Clock, User, Eye, Edit, Download } from 'lucide-react'
+import { Plus, TestTube, MapPin, Calendar, Clock, User, Eye, Edit, Download, Beaker as FlaskIcon } from 'lucide-react'
 
 interface Sample {
   id: string
@@ -36,11 +36,7 @@ export default function SamplesPage() {
   const [selectedSample, setSelectedSample] = useState<Sample | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchSamples()
-  }, [projectId])
-
-  const fetchSamples = async () => {
+  const fetchSamples = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/samples`)
       if (response.ok) {
@@ -52,7 +48,11 @@ export default function SamplesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchSamples()
+  }, [fetchSamples])
 
   const filteredSamples = samples.filter(sample => {
     const matchesSearch = sample.sample_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -275,7 +275,7 @@ export default function SamplesPage() {
 
         {filteredSamples.length === 0 && (
           <div className="text-center py-12">
-            <Flask className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <FlaskIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Samples Found</h3>
             <p className="text-gray-600 mb-4">
               {searchTerm || statusFilter !== 'all'
@@ -304,7 +304,7 @@ export default function SamplesPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Flask className="w-6 h-6 text-blue-600" />
+                    <FlaskIcon className="w-6 h-6 text-blue-600" />
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-gray-900">{selectedSample.sample_id}</h2>

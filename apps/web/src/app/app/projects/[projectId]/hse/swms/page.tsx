@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, FileText, AlertTriangle, Users, Calendar, CheckCircle, Clock, Eye, Edit, Download } from 'lucide-react'
 
@@ -31,11 +31,7 @@ export default function SwmsRegisterPage() {
   const [selectedSwms, setSelectedSwms] = useState<Swms | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchSwms()
-  }, [projectId])
-
-  const fetchSwms = async () => {
+  const fetchSwms = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/hse/swms`)
       if (response.ok) {
@@ -47,7 +43,11 @@ export default function SwmsRegisterPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchSwms()
+  }, [fetchSwms])
 
   const filteredSwms = swms.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

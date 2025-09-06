@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Truck, Wrench, AlertTriangle, CheckCircle, Clock, MapPin, Fuel, Settings, Eye, Edit } from 'lucide-react'
 
@@ -35,11 +35,7 @@ export default function PlantPage() {
   const [selectedPlant, setSelectedPlant] = useState<PlantItem | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchPlant()
-  }, [projectId])
-
-  const fetchPlant = async () => {
+  const fetchPlant = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/field/plant`)
       if (response.ok) {
@@ -51,7 +47,11 @@ export default function PlantPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchPlant()
+  }, [fetchPlant])
 
   const filteredPlant = plant.filter(item => {
     const matchesType = selectedType === 'all' || item.type === selectedType

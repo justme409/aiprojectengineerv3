@@ -10,7 +10,7 @@ export default function Page() {
 	const projectId = params.projectId as string
 	// In a real app, userId comes from session; for now, load via API on server and inject, or fetch server-side. Here we assume next-auth session supplies it client-side alternatively via an endpoint.
 	const userId = ''
-	return <ApprovalsInbox userId={userId} projectId={projectId} />
+	return <ApprovalsInbox projectId={projectId} />
 }
 
 

@@ -3,11 +3,12 @@ import { getProjectById } from '@/lib/actions/project-actions'
 import InspectionRegister from '@/components/features/qa/InspectionRegister'
 
 interface PageProps {
-	params: { projectId: string }
+	params: Promise<{ projectId: string }>
 }
 
 export default async function InspectionsPage({ params }: PageProps) {
-	const project = await getProjectById(params.projectId)
+	const { projectId } = await params
+	const project = await getProjectById(projectId)
 	if (!project) notFound()
 
 	return (
@@ -17,7 +18,7 @@ export default async function InspectionsPage({ params }: PageProps) {
 				<p className="text-gray-600">Manage inspection requests and schedule inspections</p>
 			</div>
 
-			<InspectionRegister projectId={params.projectId} />
+			<InspectionRegister projectId={projectId} />
 		</main>
 	)
 }

@@ -46,7 +46,7 @@ export function EmailSignIn({ onEmailSent }: EmailSignInProps) {
           </div>
           <CardTitle>Check your email</CardTitle>
           <CardDescription>
-            We've sent a sign-in link to <strong>{email}</strong>
+            We&apos;ve sent a sign-in link to <strong>{email}</strong>
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center space-y-4">
@@ -70,7 +70,7 @@ export function EmailSignIn({ onEmailSent }: EmailSignInProps) {
       <CardHeader className="text-center">
         <CardTitle>Sign in with Email</CardTitle>
         <CardDescription>
-          Enter your email address and we'll send you a sign-in link
+          Enter your email address and we&apos;ll send you a sign-in link
         </CardDescription>
       </CardHeader>
       <CardContent>

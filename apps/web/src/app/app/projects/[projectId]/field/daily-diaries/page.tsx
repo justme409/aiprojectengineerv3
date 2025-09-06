@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, BookOpen, Cloud, Users, Calendar, Clock, Camera, FileText, Edit, Eye } from 'lucide-react'
 
@@ -31,11 +31,7 @@ export default function DailyDiariesPage() {
   const [selectedDiary, setSelectedDiary] = useState<DailyDiary | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchDiaries()
-  }, [projectId])
-
-  const fetchDiaries = async () => {
+  const fetchDiaries = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/field/daily-diaries`)
       if (response.ok) {
@@ -47,7 +43,11 @@ export default function DailyDiariesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchDiaries()
+  }, [fetchDiaries])
 
   const currentDiary = diaries.find(d => d.date === selectedDate)
 

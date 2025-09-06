@@ -16,6 +16,8 @@ import {
   Star
 } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 const features = [
   {
     icon: Shield,
@@ -165,7 +167,7 @@ export default function LandingPage() {
                     ))}
                   </div>
                   <CardDescription className="text-base italic">
-                    "{testimonial.content}"
+                    &quot;{testimonial.content}&quot;
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

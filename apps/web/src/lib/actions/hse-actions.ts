@@ -1,5 +1,6 @@
 import { query } from '@/lib/db'
 import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { RelationshipEdgeType } from '@/types/graph'
 
 export async function createSwms(input: {
 	project_id: string
@@ -45,7 +46,7 @@ export async function issuePermit(input: {
 		edges: [{
 			from_asset_id: '',
 			to_asset_id: input.issuer,
-			edge_type: 'APPROVED_BY',
+			edge_type: 'APPROVED_BY' as RelationshipEdgeType,
 			properties: { approved_at: new Date().toISOString() }
 		}],
 		idempotency_key: `permit:${input.project_id}:${input.name}`
@@ -71,7 +72,7 @@ export async function logToolboxTalk(input: {
 		edges: [{
 			from_asset_id: '',
 			to_asset_id: input.conductor,
-			edge_type: 'OWNED_BY'
+			edge_type: 'OWNED_BY' as RelationshipEdgeType
 		}],
 		idempotency_key: `toolbox:${input.project_id}:${input.date}:${input.topic}`
 	}
@@ -97,7 +98,7 @@ export async function recordIncident(input: {
 		edges: [{
 			from_asset_id: '',
 			to_asset_id: input.reported_by,
-			edge_type: 'REPORTED_BY',
+			edge_type: 'REPORTED_BY' as RelationshipEdgeType,
 			properties: { reported_at: new Date().toISOString() }
 		}],
 		idempotency_key: `incident:${input.project_id}:${Date.now()}`

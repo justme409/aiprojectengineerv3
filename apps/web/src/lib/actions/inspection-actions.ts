@@ -1,5 +1,6 @@
 import { query } from '@/lib/db'
 import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { RelationshipEdgeType } from '@/types/graph'
 
 export async function createInspectionRequest(input: {
 	project_id: string
@@ -23,18 +24,18 @@ export async function createInspectionRequest(input: {
 			{
 				from_asset_id: '',
 				to_asset_id: input.lot_asset_id,
-				edge_type: 'EVIDENCES',
+				edge_type: 'EVIDENCES' as RelationshipEdgeType,
 				properties: { source: 'inspection_request', timestamp: new Date().toISOString() }
 			},
 			{
 				from_asset_id: '',
 				to_asset_id: input.wbs_node_asset_id,
-				edge_type: 'COVERS_WBS'
+				edge_type: 'COVERS_WBS' as RelationshipEdgeType
 			},
 			{
 				from_asset_id: '',
 				to_asset_id: input.lbs_node_asset_id,
-				edge_type: 'LOCATED_IN_LBS'
+				edge_type: 'LOCATED_IN_LBS' as RelationshipEdgeType
 			}
 		],
 		idempotency_key: `ir:${input.project_id}:${input.checkpoint_id}`
@@ -53,7 +54,7 @@ export async function scheduleInspection(id: string, scheduledAt: string, inspec
 		edges: [{
 			from_asset_id: id,
 			to_asset_id: inspectorId,
-			edge_type: 'ASSIGNED_TO',
+			edge_type: 'ASSIGNED_TO' as RelationshipEdgeType,
 			properties: { scheduled_at: scheduledAt }
 		}],
 		idempotency_key: `schedule:${id}`
@@ -70,7 +71,7 @@ export async function signOffInspection(id: string, signatureData: any, roleAtSi
 		edges: [{
 			from_asset_id: id,
 			to_asset_id: signedBy,
-			edge_type: 'APPROVED_BY',
+			edge_type: 'APPROVED_BY' as RelationshipEdgeType,
 			properties: { approved_at: new Date().toISOString() }
 		}],
 		idempotency_key: `signoff:${id}`

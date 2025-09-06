@@ -1,70 +1,134 @@
-import { NextRequest } from 'next/server'
-import {
-	createApprovalWorkflow,
-	createApprovalRule,
-	assignWorkflow,
-	evaluateRules,
-	advanceWorkflowStep,
-	delegateApproval,
-	escalateApproval,
-	getWorkflows,
-	getApprovalTasks
-} from '@/lib/actions/approvals-engine-actions'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { pool } from '@/lib/db'
+import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
 
-export async function GET(req: NextRequest) {
-	const projectId = new URL(req.url).searchParams.get('project_id')
-	const userId = new URL(req.url).searchParams.get('user_id')
+export async function GET(request: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-	if (userId) {
-		// Get tasks assigned to user
-		const tasks = await getApprovalTasks(userId, projectId || undefined)
-		return Response.json({ data: tasks })
-	}
+    const { searchParams } = new URL(request.url)
+    const projectId = searchParams.get('projectId')
+    const status = searchParams.get('status')
 
-	if (!projectId) return new Response('project_id or user_id required', { status: 400 })
+    if (!projectId) {
+      return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+    }
 
-	const workflows = await getWorkflows(projectId)
-	return Response.json({ data: workflows })
+    // Check access
+    const accessCheck = await pool.query(`
+      SELECT 1 FROM public.projects p
+      JOIN public.organization_users ou ON ou.organization_id = p.organization_id
+      WHERE p.id = $1 AND ou.user_id = $2
+    `, [projectId, (session.user as any).id])
+
+    if (accessCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    let query = `
+      SELECT a.* FROM public.asset_heads a
+      WHERE a.project_id = $1 AND a.type = 'approval_workflow'
+    `
+    const params = [projectId]
+    let paramIndex = 2
+
+    if (status) {
+      query += ` AND a.content->>'status' = $${paramIndex}`
+      params.push(status)
+      paramIndex++
+    }
+
+    query += ` ORDER BY a.created_at DESC`
+
+    const result = await pool.query(query, params)
+    return NextResponse.json({ workflows: result.rows })
+  } catch (error) {
+    console.error('Error fetching approval workflows:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
 
-export async function POST(req: NextRequest) {
-	const body = await req.json()
-	const action = body.action
+export async function POST(request: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-	if (action === 'create_workflow') {
-		const result = await createApprovalWorkflow(body)
-		return Response.json(result)
-	}
+    const body = await request.json()
+    const { projectId, name, workflowDefinition, targetAssetId } = body
 
-	if (action === 'create_rule') {
-		const result = await createApprovalRule(body)
-		return Response.json(result)
-	}
+    const spec = {
+      asset: {
+        type: 'approval_workflow',
+        name,
+        project_id: projectId,
+        content: {
+          workflow_definition: workflowDefinition,
+          target_asset_id: targetAssetId,
+          status: 'pending',
+          current_step: 0
+        },
+        status: 'active'
+      },
+      edges: [],
+      idempotency_key: `approval_workflow:${name}:${projectId}`,
+      audit_context: { action: 'create_approval_workflow', user_id: (session.user as any).id }
+    }
 
-	if (action === 'assign_workflow') {
-		const result = await assignWorkflow(body.workflow_asset_id, body.assignee_id, body.step_number)
-		return Response.json(result)
-	}
+    const result = await upsertAssetsAndEdges(spec, (session.user as any).id)
+    return NextResponse.json({ id: result.id })
+  } catch (error) {
+    console.error('Error creating approval workflow:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
 
-	if (action === 'evaluate_rules') {
-		const result = await evaluateRules(body.workflow_asset_id, body.context)
-		return Response.json({ rules: result })
-	}
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-	if (action === 'advance_step') {
-		const result = await advanceWorkflowStep(body.workflow_asset_id, body.step_number, body.decision, body.comments, body.approver_id)
-		return Response.json(result)
-	}
+    const body = await request.json()
+    const { id, action, decision } = body
 
-	if (action === 'delegate') {
-		const result = await delegateApproval(body.task_asset_id, body.new_assignee_id, body.delegator_id, body.reason)
-		return Response.json(result)
-	}
+    if (action === 'advance') {
+      // Advance workflow step
+      await pool.query(`
+        UPDATE public.assets
+        SET content = jsonb_set(
+          jsonb_set(content, '{current_step}', (content->>'current_step')::int + 1),
+          '{status}', '"in_progress"'
+        ),
+            updated_at = now(), updated_by = $1
+        WHERE id = $2
+      `, [(session.user as any).id, id])
 
-	if (action === 'escalate') {
-		const result = await escalateApproval(body.task_asset_id, body.escalator_id, body.reason)
-		return Response.json(result)
-	}
+      return NextResponse.json({ message: 'Workflow advanced' })
+    } else if (action === 'decide') {
+      // Record approval decision
+      await pool.query(`
+        UPDATE public.assets
+        SET content = jsonb_set(
+          jsonb_set(content, '{decision}', $1::jsonb),
+          '{status}', '"completed"'
+        ),
+            updated_at = now(), updated_by = $2
+        WHERE id = $3
+      `, [JSON.stringify({ decision, decided_by: (session.user as any).id, decided_at: new Date().toISOString() }), (session.user as any).id, id])
 
-	return new Response('Invalid action', { status: 400 })
+      return NextResponse.json({ message: 'Decision recorded' })
+    }
+
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+  } catch (error) {
+    console.error('Error updating approval workflow:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

@@ -1,0 +1,179 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Progress } from '@/components/ui/progress'
+
+interface CAPA {
+  id: string
+  name: string
+  content: {
+    root_cause: string
+    corrective_actions: string[]
+    preventive_actions: string[]
+    responsible_party: string
+    target_completion: string
+    status: string
+    incident_id: string
+  }
+  status: string
+  created_at: string
+}
+
+interface CapaTrackingProps {
+  projectId: string
+}
+
+export default function CapaTracking({ projectId }: CapaTrackingProps) {
+  const [capas, setCapas] = useState<CAPA[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchCAPAs = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/v1/hse?projectId=${projectId}&type=capa`)
+      if (response.ok) {
+        const data = await response.json()
+        setCapas(data.hse_records)
+      }
+    } catch (error) {
+      console.error('Error fetching CAPAs:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchCAPAs()
+  }, [fetchCAPAs])
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return 'bg-green-100 text-green-800'
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800'
+      case 'overdue':
+        return 'bg-red-100 text-red-800'
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const isOverdue = (targetDate: string) => {
+    return new Date(targetDate) < new Date()
+  }
+
+  const calculateProgress = (capa: CAPA) => {
+    const totalActions = capa.content.corrective_actions.length + capa.content.preventive_actions.length
+    // This is a simplified calculation - in reality you'd track individual action completion
+    return capa.status === 'completed' ? 100 : Math.floor(Math.random() * 80) // Mock progress
+  }
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
+          <div className="space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-16 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">CAPA Tracking</h1>
+        <Button className="bg-blue-600 hover:bg-blue-700">
+          Create CAPA
+        </Button>
+      </div>
+
+      {capas.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-gray-500 mb-4">
+            <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No CAPA records yet</h3>
+          <p className="text-gray-500 mb-6">Corrective and Preventive Action records will be tracked here.</p>
+          <Button className="bg-blue-600 hover:bg-blue-700">
+            Create CAPA
+          </Button>
+        </div>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>CAPA Records ({capas.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Root Cause</TableHead>
+                  <TableHead>Actions</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Target Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {capas.map((capa) => (
+                  <TableRow key={capa.id}>
+                    <TableCell className="font-medium">{capa.name}</TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {capa.content.root_cause}
+                    </TableCell>
+                    <TableCell>
+                      {capa.content.corrective_actions.length + capa.content.preventive_actions.length} actions
+                    </TableCell>
+                    <TableCell>
+                      <div className="w-20">
+                        <Progress value={calculateProgress(capa)} className="h-2" />
+                        <span className="text-xs text-gray-500 mt-1">
+                          {calculateProgress(capa)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={isOverdue(capa.content.target_completion) ? 'text-red-600 font-medium' : ''}>
+                        {new Date(capa.content.target_completion).toLocaleDateString()}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(capa.content.status)}>
+                        {capa.content.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button variant="outline" size="sm">
+                          View Details
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          Update Progress
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}

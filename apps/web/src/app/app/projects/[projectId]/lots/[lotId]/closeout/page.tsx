@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { ArrowLeft, CheckCircle, AlertTriangle, FileText, Download, Eye, Calendar, MapPin, User, Clock, Shield } from 'lucide-react'
 import Link from 'next/link'
@@ -121,11 +121,7 @@ export default function LotCloseoutPage() {
   const [closeout, setCloseout] = useState<LotCloseout | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchCloseoutData()
-  }, [projectId, lotId])
-
-  const fetchCloseoutData = async () => {
+  const fetchCloseoutData = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/lots/${lotId}/closeout`)
       if (response.ok) {
@@ -137,7 +133,11 @@ export default function LotCloseoutPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId, lotId])
+
+  useEffect(() => {
+    fetchCloseoutData()
+  }, [fetchCloseoutData])
 
   const getStatusBadge = (status: string) => {
     const colors = {

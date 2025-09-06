@@ -1,15 +1,15 @@
-import { NextAuthOptions } from 'next-auth'
+import NextAuth from 'next-auth'
 import { PrismaAdapter } from '@auth/prisma-adapter'
 import { PrismaClient } from '@prisma/client'
-import CredentialsProvider from 'next-auth/providers/credentials'
+import Credentials from 'next-auth/providers/credentials'
 import { compare } from 'bcrypt'
 
 const prisma = new PrismaClient()
 
-export const authOptions: NextAuthOptions = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: [
-    CredentialsProvider({
+    Credentials({
       name: 'credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
@@ -21,7 +21,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: credentials.email as string },
           include: { accounts: true, sessions: true }
         })
 
@@ -29,7 +29,7 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const isPasswordValid = await compare(credentials.password, user.password)
+        const isPasswordValid = await compare(credentials.password as string, user.password || '')
 
         if (!isPasswordValid) {
           return null
@@ -55,8 +55,8 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string
+      if (token && session.user) {
+        ;(session.user as any).id = (token as any).id as string
       }
       return session
     },
@@ -64,19 +64,19 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/auth/login',
   },
-}
+})
 
 // Compatibility view for auth.users
 export async function createAuthUsersView() {
-  await prisma.$executeRaw`
+  await prisma.$executeRawUnsafe(`
     CREATE OR REPLACE VIEW auth.users AS
     SELECT
       u.id,
-      u.name AS email,
-      u.email AS raw_user_meta_data,
-      u.image AS raw_app_meta_data,
+      u.email AS email,
+      to_jsonb(u.*) AS raw_user_meta_data,
+      '{}'::jsonb AS raw_app_meta_data,
       u.created_at,
       u.updated_at
     FROM public.users u;
-  `
+  `)
 }

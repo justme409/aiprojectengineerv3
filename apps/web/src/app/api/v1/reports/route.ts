@@ -1,172 +1,166 @@
-import { NextRequest } from 'next/server'
-import { query } from '@/lib/db'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { pool } from '@/lib/db'
 
-export async function GET(req: NextRequest) {
-	const projectId = new URL(req.url).searchParams.get('project_id')
-	const reportType = new URL(req.url).searchParams.get('type') || 'summary'
+export async function GET(request: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-	if (!projectId) return new Response('project_id required', { status: 400 })
+    const { searchParams } = new URL(request.url)
+    const projectId = searchParams.get('projectId')
+    const reportType = searchParams.get('type')
+    const dateFrom = searchParams.get('dateFrom')
+    const dateTo = searchParams.get('dateTo')
 
-	switch (reportType) {
-		case 'summary':
-			return Response.json(await generateProjectSummary(projectId))
-		case 'quality':
-			return Response.json(await generateQualityReport(projectId))
-		case 'inspections':
-			return Response.json(await generateInspectionReport(projectId))
-		case 'tests':
-			return Response.json(await generateTestReport(projectId))
-		case 'hse':
-			return Response.json(await generateHSEReport(projectId))
-		case 'field':
-			return Response.json(await generateFieldReport(projectId))
-		default:
-			return new Response('Invalid report type', { status: 400 })
-	}
+    if (!projectId) {
+      return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+    }
+
+    // Check access
+    const accessCheck = await pool.query(`
+      SELECT 1 FROM public.projects p
+      JOIN public.organization_users ou ON ou.organization_id = p.organization_id
+      WHERE p.id = $1 AND ou.user_id = $2
+    `, [projectId, (session.user as any).id])
+
+    if (accessCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    let reportData = {}
+
+    switch (reportType) {
+      case 'quality_dashboard':
+        reportData = await generateQualityDashboard(projectId, dateFrom || undefined, dateTo || undefined)
+        break
+      case 'inspection_summary':
+        reportData = await generateInspectionSummary(projectId, dateFrom || undefined, dateTo || undefined)
+        break
+      case 'lot_progress':
+        reportData = await generateLotProgress(projectId)
+        break
+      case 'hse_incidents':
+        reportData = await generateHSEIncidents(projectId, dateFrom || undefined, dateTo || undefined)
+        break
+      default:
+        reportData = await generateProjectOverview(projectId)
+    }
+
+    return NextResponse.json({
+      report_type: reportType || 'overview',
+      generated_at: new Date().toISOString(),
+      date_range: { from: dateFrom, to: dateTo },
+      data: reportData
+    })
+  } catch (error) {
+    console.error('Error generating report:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }
 
-async function generateProjectSummary(projectId: string) {
-	const project = await query('SELECT * FROM public.projects WHERE id=$1', [projectId])
-	if (project.rows.length === 0) throw new Error('Project not found')
+async function generateQualityDashboard(projectId: string, dateFrom?: string, dateTo?: string) {
+  const dateFilter = dateFrom && dateTo ? `AND a.created_at BETWEEN '${dateFrom}' AND '${dateTo}'` : ''
 
-	const [
-		assets,
-		inspections,
-		tests,
-		hseIncidents,
-		fieldAssets
-	] = await Promise.all([
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND is_current AND NOT is_deleted', [projectId]),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'inspection_request']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'test_request']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'incident']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type IN ($2, $3, $4) AND is_current AND NOT is_deleted', [projectId, 'daily_diary', 'site_instruction', 'timesheet'])
-	])
+  const [lotsResult, inspectionsResult, testsResult] = await Promise.all([
+    pool.query(`
+      SELECT COUNT(*) as total_lots,
+             COUNT(*) FILTER (WHERE status = 'closed') as closed_lots
+      FROM public.asset_heads
+      WHERE project_id = $1 AND type = 'lot' ${dateFilter}
+    `, [projectId]),
 
-	return {
-		project: project.rows[0],
-		summary: {
-			total_assets: parseInt(assets.rows[0].count),
-			inspections: parseInt(inspections.rows[0].count),
-			tests: parseInt(tests.rows[0].count),
-			hse_incidents: parseInt(hseIncidents.rows[0].count),
-			field_records: parseInt(fieldAssets.rows[0].count)
-		}
-	}
+    pool.query(`
+      SELECT COUNT(*) as total_inspections,
+             COUNT(*) FILTER (WHERE status = 'approved') as approved_inspections
+      FROM public.asset_heads
+      WHERE project_id = $1 AND type = 'inspection_request' ${dateFilter}
+    `, [projectId]),
+
+    pool.query(`
+      SELECT COUNT(*) as total_tests,
+             COUNT(*) FILTER (WHERE status = 'passed') as passed_tests
+      FROM public.asset_heads
+      WHERE project_id = $1 AND type IN ('test_result', 'test_request') ${dateFilter}
+    `, [projectId])
+  ])
+
+  return {
+    lots: lotsResult.rows[0],
+    inspections: inspectionsResult.rows[0],
+    tests: testsResult.rows[0]
+  }
 }
 
-async function generateQualityReport(projectId: string) {
-	const [
-		workLots,
-		inspectionPoints,
-		testResults,
-		ncrs,
-		itpDocuments
-	] = await Promise.all([
-		query('SELECT * FROM public.work_lot_register WHERE project_id=$1', [projectId]),
-		query('SELECT * FROM public.hold_witness_register WHERE project_id=$1', [projectId]),
-		query('SELECT COUNT(*) as count, content->>\'pass_fail\' as result FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted GROUP BY content->>\'pass_fail\'', [projectId, 'test_result']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'ncr']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'itp_document'])
-	])
+async function generateInspectionSummary(projectId: string, dateFrom?: string, dateTo?: string) {
+  const dateFilter = dateFrom && dateTo ? `AND a.created_at BETWEEN '${dateFrom}' AND '${dateTo}'` : ''
 
-	const testPassFail = testResults.rows.reduce((acc: any, row: any) => {
-		acc[row.result || 'unknown'] = parseInt(row.count)
-		return acc
-	}, {})
+  const result = await pool.query(`
+    SELECT
+      COUNT(*) as total,
+      COUNT(*) FILTER (WHERE a.status = 'approved') as approved,
+      COUNT(*) FILTER (WHERE a.status = 'rejected') as rejected,
+      COUNT(*) FILTER (WHERE a.status = 'pending') as pending,
+      AVG(EXTRACT(EPOCH FROM (a.updated_at - a.created_at))/86400) as avg_completion_days
+    FROM public.asset_heads a
+    WHERE a.project_id = $1 AND a.type = 'inspection_request' ${dateFilter}
+  `, [projectId])
 
-	return {
-		work_lots: workLots.rows,
-		inspection_points: inspectionPoints.rows,
-		test_results_summary: testPassFail,
-		ncrs_count: parseInt(ncrs.rows[0]?.count || 0),
-		itp_documents_count: parseInt(itpDocuments.rows[0]?.count || 0)
-	}
+  return result.rows[0]
 }
 
-async function generateInspectionReport(projectId: string) {
-	const [
-		inspections,
-		scheduled,
-		completed,
-		overdue
-	] = await Promise.all([
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'inspection_request']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND content->>\'scheduled_at\' IS NOT NULL AND is_current AND NOT is_deleted', [projectId, 'inspection_request']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND approval_state=$3 AND is_current AND NOT is_deleted', [projectId, 'inspection_request', 'approved']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND content->>\'sla_due_at\' < NOW()::text AND approval_state != $3 AND is_current AND NOT is_deleted', [projectId, 'inspection_request', 'approved'])
-	])
+async function generateLotProgress(projectId: string) {
+  const result = await pool.query(`
+    SELECT
+      COUNT(*) as total_lots,
+      COUNT(*) FILTER (WHERE status = 'active') as active_lots,
+      COUNT(*) FILTER (WHERE status = 'closed') as closed_lots,
+      COUNT(*) FILTER (WHERE status = 'on_hold') as on_hold_lots
+    FROM public.asset_heads
+    WHERE project_id = $1 AND type = 'lot'
+  `, [projectId])
 
-	return {
-		total: parseInt(inspections.rows[0].count),
-		scheduled: parseInt(scheduled.rows[0].count),
-		completed: parseInt(completed.rows[0].count),
-		overdue: parseInt(overdue.rows[0].count)
-	}
+  return result.rows[0]
 }
 
-async function generateTestReport(projectId: string) {
-	const [
-		testRequests,
-		testResults,
-		samples,
-		passRate
-	] = await Promise.all([
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'test_request']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'test_result']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'sample']),
-		query('SELECT ROUND(AVG(CASE WHEN content->>\'pass_fail\' = \'pass\' THEN 1 ELSE 0 END) * 100, 2) as rate FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'test_result'])
-	])
+async function generateHSEIncidents(projectId: string, dateFrom?: string, dateTo?: string) {
+  const dateFilter = dateFrom && dateTo ? `AND a.created_at BETWEEN '${dateFrom}' AND '${dateTo}'` : ''
 
-	return {
-		test_requests: parseInt(testRequests.rows[0].count),
-		test_results: parseInt(testResults.rows[0].count),
-		samples: parseInt(samples.rows[0].count),
-		pass_rate: parseFloat(passRate.rows[0].rate || 0)
-	}
+  const result = await pool.query(`
+    SELECT
+      COUNT(*) as total_incidents,
+      COUNT(*) FILTER (WHERE a.content->>'severity' = 'high') as high_severity,
+      COUNT(*) FILTER (WHERE a.content->>'category' = 'safety') as safety_incidents,
+      COUNT(*) FILTER (WHERE a.content->>'category' = 'quality') as quality_incidents
+    FROM public.asset_heads a
+    WHERE a.project_id = $1 AND a.type = 'incident' ${dateFilter}
+  `, [projectId])
+
+  return result.rows[0]
 }
 
-async function generateHSEReport(projectId: string) {
-	const [
-		incidents,
-		swms,
-		permits,
-		toolboxTalks,
-		safetyWalks
-	] = await Promise.all([
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'incident']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'swms']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'permit']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'toolbox_talk']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'safety_walk'])
-	])
+async function generateProjectOverview(projectId: string) {
+  const [assetsResult, documentsResult] = await Promise.all([
+    pool.query(`
+      SELECT type, COUNT(*) as count
+      FROM public.asset_heads
+      WHERE project_id = $1
+      GROUP BY type
+      ORDER BY count DESC
+    `, [projectId]),
 
-	return {
-		incidents: parseInt(incidents.rows[0].count),
-		swms: parseInt(swms.rows[0].count),
-		permits: parseInt(permits.rows[0].count),
-		toolbox_talks: parseInt(toolboxTalks.rows[0].count),
-		safety_walks: parseInt(safetyWalks.rows[0].count)
-	}
-}
+    pool.query(`
+      SELECT COUNT(*) as total_documents,
+             SUM(size) as total_size
+      FROM public.documents
+      WHERE project_id = $1
+    `, [projectId])
+  ])
 
-async function generateFieldReport(projectId: string) {
-	const [
-		dailyDiaries,
-		siteInstructions,
-		timesheets,
-		plantRecords
-	] = await Promise.all([
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'daily_diary']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'site_instruction']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type=$2 AND is_current AND NOT is_deleted', [projectId, 'timesheet']),
-		query('SELECT COUNT(*) as count FROM public.assets WHERE project_id=$1 AND type IN ($2, $3, $4) AND is_current AND NOT is_deleted', [projectId, 'plant_prestart', 'maintenance_record', 'utilization_log'])
-	])
-
-	return {
-		daily_diaries: parseInt(dailyDiaries.rows[0].count),
-		site_instructions: parseInt(siteInstructions.rows[0].count),
-		timesheets: parseInt(timesheets.rows[0].count),
-		plant_records: parseInt(plantRecords.rows[0].count)
-	}
+  return {
+    asset_breakdown: assetsResult.rows,
+    documents: documentsResult.rows[0]
+  }
 }

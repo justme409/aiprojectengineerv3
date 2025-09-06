@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Flask, CheckCircle, Clock, AlertTriangle, FileText, Calendar, MapPin, User, Eye, Edit } from 'lucide-react'
+import { Plus, TestTube, CheckCircle, Clock, AlertTriangle, FileText, Calendar, MapPin, User, Eye, Edit, Beaker as FlaskIcon } from 'lucide-react'
 
 interface TestRecord {
   id: string
@@ -38,11 +38,7 @@ export default function TestsPage() {
   const [selectedTest, setSelectedTest] = useState<TestRecord | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchTests()
-  }, [projectId])
-
-  const fetchTests = async () => {
+  const fetchTests = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/tests`)
       if (response.ok) {
@@ -54,7 +50,11 @@ export default function TestsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchTests()
+  }, [fetchTests])
 
   const filteredTests = tests.filter(test => {
     const matchesSearch = test.test_method_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -301,7 +301,7 @@ export default function TestsPage() {
 
         {filteredTests.length === 0 && (
           <div className="text-center py-12">
-            <Flask className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <FlaskIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Tests Found</h3>
             <p className="text-gray-600 mb-4">
               {searchTerm || statusFilter !== 'all'

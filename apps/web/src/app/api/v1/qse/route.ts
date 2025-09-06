@@ -1,102 +1,75 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
-
-const CreateQseDocumentSchema = z.object({
-  title: z.string().min(1),
-  content: z.string().min(1),
-  type: z.string(),
-  category: z.string(),
-  section: z.string().optional(),
-  organizationId: z.string(),
-  createdBy: z.string(),
-  metadata: z.record(z.any()).optional(),
-})
+import { auth } from '@/lib/auth'
+import { pool } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type')
-    const category = searchParams.get('category')
-    const status = searchParams.get('status')
-    const limit = searchParams.get('limit')
-    const offset = searchParams.get('offset')
+    const organizationId = searchParams.get('organizationId')
 
-    // In a real implementation, this would query the database
-    // For now, return mock data
-    const mockDocuments = [
-      {
-        id: '1',
-        title: 'IMS Manual',
-        content: 'Integrated Management System Manual content...',
-        type: 'manual',
-        category: 'tier_1',
-        section: 'introduction',
-        status: 'approved',
-        organizationId: 'org-1',
-        createdBy: 'user-1',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        metadata: {},
-      },
-      {
-        id: '2',
-        title: 'Quality Policy',
-        content: 'Quality Policy document content...',
-        type: 'policy',
-        category: 'tier_1',
-        section: 'policies',
-        status: 'approved',
-        organizationId: 'org-1',
-        createdBy: 'user-1',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        metadata: {},
-      },
-    ]
+    if (!organizationId) {
+      return NextResponse.json({ error: 'organizationId required' }, { status: 400 })
+    }
 
-    return NextResponse.json({
-      documents: mockDocuments,
-      total: mockDocuments.length,
-      limit: limit ? parseInt(limit) : 50,
-      offset: offset ? parseInt(offset) : 0,
-    })
+    // Check access
+    const accessCheck = await pool.query(`
+      SELECT 1 FROM public.organization_users
+      WHERE organization_id = $1 AND user_id = $2
+    `, [organizationId, (session.user as any).id])
+
+    if (accessCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    const result = await pool.query(`
+      SELECT a.* FROM public.asset_heads a
+      WHERE a.organization_id = $1 AND a.type IN ('policy', 'procedure', 'form', 'template', 'register', 'manual', 'statement', 'plan', 'matrix', 'minutes', 'report')
+      ORDER BY a.type, a.created_at DESC
+    `, [organizationId])
+
+    return NextResponse.json({ documents: result.rows })
   } catch (error) {
     console.error('Error fetching QSE documents:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch QSE documents' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
-    const validatedData = CreateQseDocumentSchema.parse(body)
+    const { organizationId, type, name, content } = body
 
-    // In a real implementation, this would save to the database
-    // For now, return mock response
-    const newDocument = {
-      id: `qse-${Date.now()}`,
-      ...validatedData,
-      status: 'draft',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    // Check access
+    const accessCheck = await pool.query(`
+      SELECT 1 FROM public.organization_users
+      WHERE organization_id = $1 AND user_id = $2
+    `, [organizationId, (session.user as any).id])
+
+    if (accessCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    return NextResponse.json(newDocument, { status: 201 })
+    const result = await pool.query(`
+      INSERT INTO public.assets (
+        id, asset_uid, version, type, name, organization_id, content, status
+      ) VALUES (
+        gen_random_uuid(), gen_random_uuid(), 1, $1, $2, $3, $4, 'draft'
+      ) RETURNING *
+    `, [type, name, organizationId, content])
+
+    return NextResponse.json({ document: result.rows[0] })
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Validation error', details: error.errors },
-        { status: 400 }
-      )
-    }
-
     console.error('Error creating QSE document:', error)
-    return NextResponse.json(
-      { error: 'Failed to create QSE document' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, FileText, AlertTriangle, User, Calendar, CheckCircle, Clock, Eye, Edit, Download } from 'lucide-react'
 
@@ -31,11 +31,7 @@ export default function PermitsRegisterPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedPermit, setSelectedPermit] = useState<Permit | null>(null)
 
-  useEffect(() => {
-    fetchPermits()
-  }, [projectId])
-
-  const fetchPermits = async () => {
+  const fetchPermits = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/hse/permits`)
       if (response.ok) {
@@ -47,7 +43,11 @@ export default function PermitsRegisterPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchPermits()
+  }, [fetchPermits])
 
   const filteredPermits = permits.filter(permit => {
     const matchesSearch = permit.permit_number.toLowerCase().includes(searchTerm.toLowerCase()) ||

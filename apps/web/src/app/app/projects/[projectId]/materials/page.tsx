@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Package, CheckCircle, AlertTriangle, Clock, Eye, Edit, Download, FileText } from 'lucide-react'
 
@@ -40,11 +40,7 @@ export default function MaterialsPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchMaterials()
-  }, [projectId])
-
-  const fetchMaterials = async () => {
+  const fetchMaterials = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/materials`)
       if (response.ok) {
@@ -56,7 +52,11 @@ export default function MaterialsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchMaterials()
+  }, [fetchMaterials])
 
   const filteredMaterials = materials.filter(material => {
     const matchesSearch = material.material_code.toLowerCase().includes(searchTerm.toLowerCase()) ||

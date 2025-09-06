@@ -1,5 +1,6 @@
 import { query } from '@/lib/db'
 import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { RelationshipEdgeType } from '@/types/graph'
 
 export async function createMaterialApproval(input: {
 	project_id: string
@@ -34,7 +35,7 @@ export async function approveMaterial(id: string, approvedBy: string, approvalDa
 		edges: [{
 			from_asset_id: id,
 			to_asset_id: approvedBy,
-			edge_type: 'APPROVED_BY',
+			edge_type: 'APPROVED_BY' as RelationshipEdgeType,
 			properties: { approved_at: approvalDate }
 		}],
 		idempotency_key: `approve:${id}`
@@ -54,7 +55,7 @@ export async function attachBatchTicket(materialId: string, batchTicketData: any
 		edges: [{
 			from_asset_id: '', // Will be set to batch ticket asset
 			to_asset_id: materialId,
-			edge_type: 'EVIDENCES',
+			edge_type: 'EVIDENCES' as RelationshipEdgeType,
 			properties: { source: 'batch_ticket', timestamp: new Date().toISOString() }
 		}],
 		idempotency_key: `batch_ticket:${materialId}:${Date.now()}`

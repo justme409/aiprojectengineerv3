@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Settings, Shield, Users, Database, Bell, Save } from 'lucide-react'
 
@@ -48,11 +48,7 @@ export default function ProjectSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    fetchProjectSettings()
-  }, [projectId])
-
-  const fetchProjectSettings = async () => {
+  const fetchProjectSettings = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}`)
       if (response.ok) {
@@ -73,7 +69,11 @@ export default function ProjectSettingsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId, settings.feature_flags, settings.notification_settings])
+
+  useEffect(() => {
+    fetchProjectSettings()
+  }, [fetchProjectSettings])
 
   const handleSave = async () => {
     setSaving(true)

@@ -1,9 +1,31 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
 
-export async function GET(req: NextRequest, { params }: { params: { provider: string } }) {
-	// For NextAuth, the real callback is under /api/auth/callback/[provider]. This route exists to satisfy the Spec and can redirect.
-	const provider = params.provider
-	return Response.redirect(new URL(`/api/auth/callback/${provider}`, req.url))
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ provider: string }> }
+) {
+  try {
+    const { provider } = await params
+    // This would handle OAuth callbacks from providers like Google, GitHub, etc.
+    // For now, redirect to dashboard
+    return NextResponse.redirect(new URL('/app/dashboard', request.url))
+  } catch (error) {
+    console.error('OAuth callback error:', error)
+    return NextResponse.redirect(new URL('/auth/login?error=oauth_callback', request.url))
+  }
 }
 
-
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ provider: string }> }
+) {
+  try {
+    const { provider } = await params
+    // Handle POST callbacks if needed
+    return NextResponse.redirect(new URL('/app/dashboard', request.url))
+  } catch (error) {
+    console.error('OAuth callback error:', error)
+    return NextResponse.redirect(new URL('/auth/login?error=oauth_callback', request.url))
+  }
+}

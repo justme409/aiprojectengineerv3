@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { query } from '@/lib/db'
 
 const migrations: Array<{ from: RegExp, to: (match: RegExpMatchArray) => string }> = [
@@ -76,15 +75,24 @@ export async function middleware(req: NextRequest) {
 	const isProtected = protectedRoutes.some(route => pathname.startsWith(route))
 
 	if (isProtected) {
-		const session = await getServerSession(authOptions)
+		const session = await auth()
 		if (!session) {
 			return NextResponse.redirect(new URL('/auth/login', req.url))
 		}
 
-		// Check subscription status (placeholder - integrate with Stripe later)
-		const hasSubscription = true // TODO: Check actual subscription status
-		if (!hasSubscription) {
-			return NextResponse.redirect(new URL('/auth/subscription/required', req.url))
+		// Check subscription status via project_feature_flags
+		try {
+			const userId = session.user?.id
+			if (userId) {
+				const subscriptionResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/v1/billing/subscription-status?user_id=${userId}&project_id=${req.nextUrl.pathname.split('/')[3] || ''}`)
+				const subscriptionData = await subscriptionResponse.json()
+				if (!subscriptionData.active) {
+					return NextResponse.redirect(new URL('/auth/subscription/required', req.url))
+				}
+			}
+		} catch (error) {
+			// If subscription check fails, allow access (fail open for now)
+			console.error('Subscription check failed:', error)
 		}
 	}
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Award, Calendar, AlertTriangle, CheckCircle, Clock, Eye, Edit, Download, FileText } from 'lucide-react'
 
@@ -35,11 +35,7 @@ export default function CertificatesPage() {
   const [selectedCertificate, setSelectedCertificate] = useState<Certificate | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchCertificates()
-  }, [projectId])
-
-  const fetchCertificates = async () => {
+  const fetchCertificates = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/certificates`)
       if (response.ok) {
@@ -51,7 +47,11 @@ export default function CertificatesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchCertificates()
+  }, [fetchCertificates])
 
   const filteredCertificates = certificates.filter(cert => {
     const matchesSearch = cert.certificate_number.toLowerCase().includes(searchTerm.toLowerCase()) ||

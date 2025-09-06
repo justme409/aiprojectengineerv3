@@ -4,11 +4,12 @@ import DocumentList from '@/components/features/document/DocumentList'
 import DocumentUpload from '@/components/features/document/DocumentUpload'
 
 interface PageProps {
-	params: { projectId: string }
+	params: Promise<{ projectId: string }>
 }
 
 export default async function ProjectDocumentsPage({ params }: PageProps) {
-	const project = await getProjectById(params.projectId)
+	const { projectId } = await params
+	const project = await getProjectById(projectId)
 	if (!project) notFound()
 
 	return (
@@ -19,12 +20,12 @@ export default async function ProjectDocumentsPage({ params }: PageProps) {
 			</div>
 
 			<div className="mb-8">
-				<DocumentUpload projectId={params.projectId} />
+				<DocumentUpload projectId={projectId} />
 			</div>
 
 			<div>
 				<h2 className="text-xl font-semibold mb-4">Document Library</h2>
-				<DocumentList projectId={params.projectId} />
+				<DocumentList projectId={projectId} />
 			</div>
 		</main>
 	)

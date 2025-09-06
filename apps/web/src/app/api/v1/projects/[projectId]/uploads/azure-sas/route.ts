@@ -1,23 +1,34 @@
-import { NextRequest } from 'next/server'
-import { query } from '@/lib/db'
-import { generateBlobSasUrl } from '@/lib/azure/blob'
-import crypto from 'node:crypto'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { azureStorage } from '@/lib/azure/storage'
 
-export async function POST(req: NextRequest, { params }: { params: { projectId: string } }) {
-	const body = await req.json()
-	const projectId = params.projectId
-	const files: Array<{ file_name: string, content_type?: string, size?: number, source_hash?: string }> = body.files || []
-	const out: any[] = []
-	for (const f of files) {
-		const id = crypto.randomUUID()
-		const storagePath = `${projectId}/${id}/${encodeURIComponent(f.file_name)}`
-		await query(
-			`INSERT INTO public.documents (id, project_id, storage_path, file_name, content_type, size, source_hash) VALUES ($1,$2,$3,$4,$5,$6,$7)
-			 ON CONFLICT (project_id, source_hash) WHERE $7 IS NOT NULL DO NOTHING`,
-			[id, projectId, storagePath, f.file_name, f.content_type ?? null, f.size ?? null, f.source_hash ?? null]
-		)
-		const uploadUrl = generateBlobSasUrl(storagePath)
-		out.push({ id, uploadUrl, storagePath })
-	}
-	return Response.json({ uploads: out })
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { projectId } = await params
+    const body = await request.json()
+    const { files } = body
+
+    if (!files || !Array.isArray(files)) {
+      return NextResponse.json({ error: 'Files array required' }, { status: 400 })
+    }
+
+    if (!azureStorage.isConfigured()) {
+      return NextResponse.json({ error: 'Azure storage not configured' }, { status: 500 })
+    }
+
+    const uploadUrls = await azureStorage.generateUploadUrls(files, projectId)
+
+    return NextResponse.json({ uploadUrls })
+  } catch (error) {
+    console.error('Error generating upload URLs:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

@@ -84,7 +84,7 @@ export async function ingestRawEmail(rawMime: string, projectId: string) {
 	const result = await upsertAssetsAndEdges(spec)
 
 	// Handle threading
-	const threadInfo = await threadCorrespondence(projectId, parsedEmail.message_id, parsedEmail.in_reply_to)
+	const threadInfo = await threadCorrespondence(projectId, parsedEmail.message_id, parsedEmail.in_reply_to || undefined)
 
 	// Update the correspondence asset with thread info
 	await upsertAssetsAndEdges({

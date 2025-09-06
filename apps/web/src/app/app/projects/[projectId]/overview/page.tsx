@@ -3,14 +3,15 @@ import { getProjectById } from '@/lib/actions/project-actions'
 import { getAssets } from '@/lib/actions/asset-actions'
 
 interface PageProps {
-	params: { projectId: string }
+	params: Promise<{ projectId: string }>
 }
 
 export default async function ProjectOverviewPage({ params }: PageProps) {
-	const project = await getProjectById(params.projectId)
+	const { projectId } = await params
+	const project = await getProjectById(projectId)
 	if (!project) notFound()
 
-	const assets = await getAssets({ project_id: params.projectId, limit: 10 })
+	const assets = await getAssets({ project_id: projectId, limit: 10 })
 
 	return (
 		<main className="p-6">

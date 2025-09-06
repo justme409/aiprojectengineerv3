@@ -8,10 +8,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "pnpm --filter web dev",
+    "dev": "cd services/langgraphv10 && source langgraph_env/bin/activate && langgraph dev",
+    "web-dev": "pnpm --filter web dev",
+    "langgraph": "cd services/langgraphv10 && source langgraph_env/bin/activate && langgraph dev",
     "build": "pnpm --filter web build",
     "migrate": "pnpm --filter web db:migrate",
-    "test-db": "node test-setup.js"
+    "test-db": "node test-setup.js",
+    "check": "pnpm --filter web exec tsc --noEmit ; pnpm --filter web lint"
   },
   "devDependencies": {
     "dotenv": "^16.4.5",

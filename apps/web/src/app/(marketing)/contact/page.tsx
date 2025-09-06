@@ -18,7 +18,7 @@ export default function ContactPage() {
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">Contact Us</h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Get in touch with our team. We're here to help you succeed with ProjectPro.
+            Get in touch with our team. We&apos;re here to help you succeed with ProjectPro.
           </p>
         </div>
       </section>

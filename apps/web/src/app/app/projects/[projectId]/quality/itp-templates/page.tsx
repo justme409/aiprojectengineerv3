@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, FileText, Edit, Copy, Trash2, Download, Upload, Search } from 'lucide-react'
 
@@ -35,11 +35,7 @@ export default function ItpTemplatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<ItpTemplate | null>(null)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
 
-  useEffect(() => {
-    fetchTemplates()
-  }, [projectId])
-
-  const fetchTemplates = async () => {
+  const fetchTemplates = useCallback(async () => {
     try {
       const response = await fetch(`/api/v1/projects/${projectId}/quality/itp-templates`)
       if (response.ok) {
@@ -51,7 +47,11 @@ export default function ItpTemplatesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
+
+  useEffect(() => {
+    fetchTemplates()
+  }, [fetchTemplates])
 
   const filteredTemplates = templates.filter(template => {
     const matchesSearch = template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -7,11 +7,12 @@ export async function GET(req: NextRequest) {
 
 	if (!projectId) return new Response('project_id required', { status: 400 })
 
-	let rosters = await getFieldAssets(projectId, 'roster')
+	const response = await getFieldAssets(projectId, 'roster')
+	let rosters = response.success ? response.assets : []
 
 	// Filter by date if specified
-	if (date) {
-		rosters = rosters.filter(r => r.content?.date === date)
+	if (date && rosters) {
+		rosters = rosters.filter((r: any) => r.content?.date === date)
 	}
 
 	return Response.json({ data: rosters })

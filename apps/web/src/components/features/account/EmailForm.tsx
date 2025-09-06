@@ -74,7 +74,7 @@ export function EmailForm({ initialEmail = "", onEmailUpdated }: EmailFormProps)
           </div>
           <CardTitle className="text-center">Verification email sent</CardTitle>
           <CardDescription className="text-center">
-            We've sent a verification email to <strong>{email}</strong>
+            We&apos;ve sent a verification email to <strong>{email}</strong>
           </CardDescription>
         </CardHeader>
         <CardContent className="text-center">
@@ -103,7 +103,7 @@ export function EmailForm({ initialEmail = "", onEmailUpdated }: EmailFormProps)
           Update Email
         </CardTitle>
         <CardDescription>
-          Change your email address. You'll need to verify the new email.
+          Change your email address. You&apos;ll need to verify the new email.
         </CardDescription>
       </CardHeader>
       <CardContent>

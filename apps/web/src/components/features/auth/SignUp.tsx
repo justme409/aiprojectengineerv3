@@ -145,7 +145,7 @@ export function SignUp({ onSignUp }: SignUpProps) {
             <Checkbox
               id="terms"
               checked={agreeToTerms}
-              onCheckedChange={setAgreeToTerms}
+              onCheckedChange={(checked) => setAgreeToTerms(checked === true)}
               disabled={isLoading}
             />
             <label

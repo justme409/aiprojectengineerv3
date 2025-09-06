@@ -1,112 +1,73 @@
-import { NextRequest } from 'next/server'
-import { query } from '@/lib/db'
-import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/lib/auth'
+import { pool } from '@/lib/db'
 
-export async function GET(request: NextRequest, { params }: { params: { projectId: string } }) {
-  const { projectId } = params
-
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
   try {
-    // Get identified records register
-    const records = await query(`
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { projectId } = await params
+
+    // Check access
+    const accessCheck = await pool.query(`
+      SELECT 1 FROM public.projects p
+      JOIN public.organization_users ou ON ou.organization_id = p.organization_id
+      WHERE p.id = $1 AND ou.user_id = $2
+    `, [projectId, (session.user as any).id])
+
+    if (accessCheck.rows.length === 0) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    // Get records handover data from view
+    const result = await pool.query(`
       SELECT * FROM public.identified_records_register
       WHERE project_id = $1
-      ORDER BY created_at DESC
+      ORDER BY asset_id
     `, [projectId])
 
-    return Response.json({ data: records.rows })
+    return NextResponse.json({ records_handover: result.rows })
   } catch (error) {
-    console.error('Records handover API error:', error)
-    return new Response('Internal server error', { status: 500 })
+    console.error('Error fetching records handover:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { projectId: string } }) {
-  const { projectId } = params
-  const body = await request.json()
-  const action = body.action
-
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
   try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { projectId } = await params
+    const body = await request.json()
+    const { recordId, action } = body
+
     if (action === 'mark_delivered') {
-      // Mark records as delivered
-      const delivery = {
-        asset_id: body.asset_id,
-        delivered_at: new Date().toISOString(),
-        delivered_to: body.delivered_to,
-        delivery_method: body.delivery_method,
-        delivery_reference: body.delivery_reference,
-        records_type: body.records_type
-      }
-
-      const result = await upsertAssetsAndEdges({
-        asset: {
-          type: 'record',
-          name: `Records Delivery - ${body.records_type}`,
-          project_id: projectId,
-          content: delivery
-        },
-        idempotency_key: `records_delivery:${projectId}:${body.asset_id}`
-      })
-
-      // Update the original asset to mark as delivered
-      await query(`
+      // Mark record as delivered
+      await pool.query(`
         UPDATE public.assets
-        SET content = content || $2::jsonb
-        WHERE id = $1
-      `, [body.asset_id, JSON.stringify({
-        records_delivered: true,
-        delivered_at: new Date().toISOString(),
-        delivery_reference: body.delivery_reference
-      })])
+        SET content = jsonb_set(content, '{delivered_at}', $1::jsonb),
+            updated_at = now(), updated_by = $2
+        WHERE id = $3
+      `, [JSON.stringify(new Date().toISOString()), (session.user as any).id, recordId])
 
-      return Response.json(result)
+      return NextResponse.json({ message: 'Record marked as delivered' })
     }
 
-    if (action === 'create_rmp') {
-      // Create Records Management Plan (RMP)
-      const rmp = {
-        title: body.title,
-        scope: body.scope,
-        records_schedule: body.records_schedule,
-        retention_periods: body.retention_periods,
-        disposal_methods: body.disposal_methods,
-        jurisdiction_requirements: body.jurisdiction_requirements
-      }
-
-      const result = await upsertAssetsAndEdges({
-        asset: {
-          type: 'plan',
-          subtype: 'records_management_plan',
-          name: body.title,
-          project_id: projectId,
-          content: rmp
-        },
-        idempotency_key: `rmp:${projectId}:${body.title.toLowerCase().replace(/\s+/g, '_')}`
-      })
-
-      return Response.json(result)
-    }
-
-    if (action === 'update_identified_records') {
-      // Update identified records list
-      const updates = {
-        records_identified: body.records_identified,
-        last_updated: new Date().toISOString(),
-        updated_by: body.updated_by
-      }
-
-      await query(`
-        UPDATE public.assets
-        SET content = content || $2::jsonb,
-            updated_at = NOW()
-        WHERE id = $1 AND type IN ('plan', 'itp_document', 'itp_template')
-      `, [body.asset_id, JSON.stringify(updates)])
-
-      return Response.json({ success: true })
-    }
-
-    return new Response('Invalid action', { status: 400 })
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
-    console.error('Records handover POST error:', error)
-    return new Response('Internal server error', { status: 500 })
+    console.error('Error processing records handover:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
