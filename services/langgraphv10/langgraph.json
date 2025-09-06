@@ -1,7 +1,22 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "agent": "./src/agent/graph.py:graph"
+    "agent": "./src/agent/graph.py:graph",
+    "standards_extraction": "./src/agent/graphs/standards_extraction.py:create_standards_extraction_graph",
+    "wbs_extraction": "./src/agent/graphs/wbs_extraction.py:create_wbs_extraction_graph",
+    "itp_generation": "./src/agent/graphs/itp_generation.py:create_itp_generation_graph",
+    "sampling_planner": "./src/agent/graphs/sampling_planner.py:create_sampling_planner_graph",
+    "document_extraction": "./src/agent/graphs/document_extraction.py:create_document_extraction_graph",
+    "metadata_generator": "./src/agent/graphs/metadata_generator.py:create_metadata_generator_graph",
+    "holdpoint_compliance_checker": "./src/agent/graphs/holdpoint_compliance_checker.py:create_holdpoint_compliance_checker_graph",
+    "rmp_validator": "./src/agent/graphs/rmp_validator.py:create_rmp_validator_graph",
+    "itp_completeness_checker": "./src/agent/graphs/itp_completeness_checker.py:create_itp_completeness_checker_graph",
+    "lbs_extraction": "./src/agent/graphs/lbs_extraction.py:create_lbs_extraction_graph",
+    "plan_generation": "./src/agent/graphs/plan_generation.py:create_plan_generation_graph",
+    "project_details": "./src/agent/graphs/project_details.py:create_project_details_graph",
+    "template_variant_selector": "./src/agent/graphs/template_variant_selector.py:create_template_variant_selector_graph",
+    "jurisdiction_resolver": "./src/agent/graphs/jurisdiction_resolver.py:create_jurisdiction_resolver_graph",
+    "standards_resolver": "./src/agent/graphs/standards_resolver.py:create_standards_resolver_graph"
   },
   "env": ".env",
   "image_distro": "wolfi"

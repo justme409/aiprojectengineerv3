@@ -51,14 +51,29 @@ export async function POST(
       documentAssets.push({ id: result.id, fileName: file.fileName })
     }
 
-    // Trigger AI processing
-    // This would normally start the LangGraph orchestrator
-    // For now, just return success
+    // Trigger LangGraph V10 processing - NO MOCK DATA
+    try {
+      const langGraphResult = await triggerProjectProcessingViaLangGraphEnhanced(
+        projectId,
+        documentAssets.map(doc => doc.id)
+      )
 
-    return NextResponse.json({
-      message: 'Upload processing initiated',
-      documents: documentAssets
-    })
+      return NextResponse.json({
+        message: 'LangGraph V10 processing initiated successfully',
+        documents: documentAssets,
+        langgraph: {
+          thread_id: langGraphResult.thread_id,
+          run_id: langGraphResult.run_id
+        }
+      })
+    } catch (langGraphError) {
+      console.error('LangGraph V10 processing failed:', langGraphError)
+      return NextResponse.json({
+        message: 'Documents uploaded but LangGraph processing failed',
+        documents: documentAssets,
+        error: langGraphError.message
+      }, { status: 207 }) // Multi-status response
+    }
   } catch (error) {
     console.error('Error processing uploads:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

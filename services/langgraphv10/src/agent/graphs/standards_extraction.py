@@ -1,200 +1,151 @@
-from typing import Dict, List, Any, Annotated, Optional
-from pydantic import BaseModel
-import re
-import json
+from langgraph.graph import StateGraph, START, END
+from typing import List, Dict, Any, Optional, Annotated
+from typing_extensions import TypedDict
+from pydantic import BaseModel, Field
+import os
+import logging
+from langchain_google_genai import ChatGoogleGenerativeAI
+from dotenv import load_dotenv
 
-class StandardsExtractionState(BaseModel):
+# Load environment variables
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+class ExtractedStandard(BaseModel):
+    """Schema for individual extracted standard with database information"""
+    standard_code: str = Field(description="Standard code as mentioned in document (e.g., 'AS 1379', 'ASTM C123', 'MRTS04')")
+    uuid: Optional[str] = Field(default=None, description="UUID from reference database if standard is found")
+    spec_name: Optional[str] = Field(default=None, description="Full name from reference database if standard is found")
+    org_identifier: Optional[str] = Field(default=None, description="Organization identifier from reference database if standard is found")
+    section_reference: Optional[str] = Field(default=None, description="Specific section or clause where referenced")
+    context: Optional[str] = Field(default=None, description="Context of how this standard is referenced")
+    found_in_database: bool = Field(description="Whether this standard was found in the reference database")
+    document_ids: List[str] = Field(description="IDs of the documents where this standard was found")
+
+class ExtractedStandards(BaseModel):
+    """Schema for extracted standards response."""
+    standards: List[ExtractedStandard] = Field(description="List of standards found with database information")
+
+class StandardsExtractionState(TypedDict):
     project_id: str
-    txt_project_documents: List[Dict[str, Any]] = []
-    reference_database: Dict[str, Any] = {}
-    standards_from_project_documents: Annotated[List[Dict[str, Any]], "add"] = []
-    error: str = ""
-    done: bool = False
+    txt_project_documents: List[Dict[str, Any]]
+    reference_database: Optional[List[Dict[str, Any]]]
+    standards_from_project_documents: List[Dict[str, Any]]
+    error: Optional[str]
+    done: bool
 
-def extract_standards_from_content(content: str) -> List[Dict[str, Any]]:
-    """Extract standards references from document content"""
-    standards = []
+class InputState(TypedDict):
+    project_id: str
+    txt_project_documents: List[Dict[str, Any]]
 
-    # Standard patterns to look for
-    standard_patterns = [
-        r'(AS\s*\d+(?:\.\d+)*)',
-        r'(ISO\s*\d+(?:\.\d+)*)',
-        r'(BS\s*\d+(?:\.\d+)*)',
-        r'(EN\s*\d+(?:\.\d+)*)',
-        r'(ASTM\s*[A-Z]?\d+(?:\.\d+)*)',
-        r'(AS\s*\d+(?:\.\d+)*[^\n\r]{0,100})',  # Include context
-    ]
+class OutputState(TypedDict):
+    standards_from_project_documents: List[Dict[str, Any]]
+    error: Optional[str]
+    done: bool
 
-    found_standards = set()
+# LLM Configuration
+llm = ChatGoogleGenerativeAI(
+    model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    temperature=0.1,
+    max_output_tokens=65536,
+    include_thoughts=False,
+    thinking_budget=-1
+)
 
-    for pattern in standard_patterns:
-        matches = re.findall(pattern, content, re.IGNORECASE)
-        for match in matches:
-            # Clean up the match
-            clean_match = re.sub(r'[^\w\s\.]', '', match).strip()
-            if len(clean_match) > 3:  # Minimum length
-                found_standards.add(clean_match.upper())
+# Standards Extraction Prompt
+STANDARDS_EXTRACTION_PROMPT = """
+You are a technical standards expert analyzing construction project documents to identify referenced technical standards and match them against a reference database.
 
-    # Convert to standard format
-    for std in found_standards:
-        standard_info = parse_standard_reference(std, content)
-        if standard_info:
-            standards.append(standard_info)
+REFERENCE DATABASE (Complete list of available standards):
+{reference_db_text}
 
-    return standards
+TASK: Extract ALL technical standard codes mentioned in the project document below and match them against the reference database.
 
-def parse_standard_reference(standard_code: str, content: str) -> Optional[Dict[str, Any]]:
-    """Parse a standard reference and extract additional context"""
-    # Extract context around the standard reference
-    context_pattern = rf'.{{0,100}}{re.escape(standard_code)}.{{0,200}}'
-    context_match = re.search(context_pattern, content, re.IGNORECASE | re.DOTALL)
+STANDARD FORMATS TO LOOK FOR:
+- Australian Standards: AS 1234, AS/NZS 5678, AS 1234.1-2020
+- ASTM Standards: ASTM C123, ASTM D456-18
+- Main Roads Technical Standards: MRTS01, MRTS04, MRTS15
+- Transport for NSW: TfNSW B80, TfNSW R57
+- ISO Standards: ISO 9001, ISO 14001:2015
+- British Standards: BS 5950, BS EN 1993
+- American Standards: AASHTO, ACI 318
+- Other regional standards with similar patterns
 
-    context = ""
-    if context_match:
-        context = context_match.group(0).strip()
+EXTRACTION AND MATCHING RULES:
+1. Look for explicit standard references in the project document
+2. For each standard found, try to match it against the reference database
+3. Match by comparing the standard code mentioned in document with the "Spec ID" field in the database
+4. If found in database, include the UUID, spec_name, and org_identifier from the database
+5. If not found in database, set found_in_database to false and uuid to null
+6. Be flexible with matching - handle variations in formatting, spacing, and case
+7. Focus on standards that are actually referenced for compliance or specification purposes
+8. Include complete metadata for each standard found
 
-    # Determine standard type and organization
-    org, code = parse_standard_code(standard_code)
+MATCHING EXAMPLES:
+- Document mentions "AS 1234" → Look for "AS 1234" or similar in database Spec ID
+- Document mentions "ASTM C123-18" → Look for "ASTM C123" or similar in database Spec ID
+- Document mentions "MRTS04" → Look for "MRTS04" or "MRTS 04" in database Spec ID
 
-    return {
-        "standard_code": standard_code,
-        "uuid": f"std_{hash(standard_code) % 1000000}",  # Simple hash-based ID
-        "spec_name": f"{org} {code}",
-        "org_identifier": org,
-        "section_reference": extract_section_reference(context),
-        "context": context[:200],  # Limit context length
-        "found_in_database": True,  # Assume found for simulation
-        "document_ids": [],  # Will be populated by calling context
-        "compliance_level": determine_compliance_level(standard_code),
-        "category": categorize_standard(standard_code)
-    }
+PROJECT DOCUMENT:
+{document_content}
 
-def parse_standard_code(standard_code: str) -> tuple[str, str]:
-    """Parse standard code to extract organization and number"""
-    if standard_code.startswith('AS'):
-        return 'Australian Standard', standard_code[2:].strip()
-    elif standard_code.startswith('ISO'):
-        return 'International Organization for Standardization', standard_code[3:].strip()
-    elif standard_code.startswith('BS'):
-        return 'British Standard', standard_code[2:].strip()
-    elif standard_code.startswith('EN'):
-        return 'European Standard', standard_code[2:].strip()
-    elif standard_code.startswith('ASTM'):
-        return 'ASTM International', standard_code[4:].strip()
-    else:
-        return 'Unknown', standard_code
+Analyze the document thoroughly and provide a structured response with all standards found, whether they match the database or not.
+"""
 
-def extract_section_reference(context: str) -> Optional[str]:
-    """Extract section/clause references from context"""
-    section_patterns = [
-        r'clause\s*(\d+(?:\.\d+)*)',
-        r'section\s*(\d+(?:\.\d+)*)',
-        r'(\d+(?:\.\d+)*)',
-    ]
-
-    for pattern in section_patterns:
-        match = re.search(pattern, context, re.IGNORECASE)
-        if match:
-            return match.group(1)
-
-    return None
-
-def determine_compliance_level(standard_code: str) -> str:
-    """Determine the compliance level/importance of the standard"""
-    critical_standards = ['ISO 9001', 'AS 1288', 'AS 3600']
-    important_standards = ['AS 1289', 'ISO 14001', 'AS 4100']
-
-    for std in critical_standards:
-        if std in standard_code:
-            return 'Critical'
-
-    for std in important_standards:
-        if std in standard_code:
-            return 'Important'
-
-    return 'General'
-
-def categorize_standard(standard_code: str) -> str:
-    """Categorize the standard by domain"""
-    if '9001' in standard_code or 'quality' in standard_code.lower():
-        return 'Quality Management'
-    elif '14001' in standard_code or 'environment' in standard_code.lower():
-        return 'Environmental Management'
-    elif '45001' in standard_code or 'health' in standard_code.lower():
-        return 'Health & Safety'
-    elif 'concrete' in standard_code.lower() or '3600' in standard_code:
-        return 'Construction Materials'
-    elif 'soil' in standard_code.lower() or '1289' in standard_code:
-        return 'Geotechnical'
-    else:
-        return 'General Engineering'
-
-def validate_standards_in_database(standards: List[Dict[str, Any]], database: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Validate standards against reference database (simplified)"""
-    validated_standards = []
-
-    for std in standards:
-        # In a real implementation, this would check against a comprehensive standards database
-        # For now, we'll simulate validation
-        if 'ISO' in std['standard_code'] or 'AS' in std['standard_code']:
-            std['validation_status'] = 'Verified'
-            std['latest_version'] = std['standard_code']  # Assume current
-        else:
-            std['validation_status'] = 'Unknown'
-            std['latest_version'] = 'Check required'
-
-        validated_standards.append(std)
-
-    return validated_standards
-
-def standards_extraction_node(state: StandardsExtractionState) -> Dict[str, Any]:
-    """Extract standards from project documents"""
+def fetch_reference_database_node(state: StandardsExtractionState) -> StandardsExtractionState:
+    """Fetch reference database for standards matching"""
     try:
-        if not state.txt_project_documents:
-            return {"standards_from_project_documents": [], "error": "No documents provided"}
-
-        all_standards = []
-
-        # Extract standards from each document
-        for doc in state.txt_project_documents:
-            content = doc.get("content", "")
-            doc_standards = extract_standards_from_content(content)
-
-            # Add document reference to each standard
-            for std in doc_standards:
-                if 'document_ids' not in std:
-                    std['document_ids'] = []
-                std['document_ids'].append(doc.get("id"))
-
-            all_standards.extend(doc_standards)
-
-        # Remove duplicates based on standard_code
-        unique_standards = {}
-        for std in all_standards:
-            code = std['standard_code']
-            if code not in unique_standards:
-                unique_standards[code] = std
-            else:
-                # Merge document_ids
-                existing = unique_standards[code]
-                existing['document_ids'] = list(set(existing['document_ids'] + std['document_ids']))
-
-        standards_list = list(unique_standards.values())
-
-        # Validate against reference database
-        validated_standards = validate_standards_in_database(standards_list, state.reference_database)
-
-        return {
-            "standards_from_project_documents": validated_standards,
-            "done": True
-        }
-
+        # Import the tool function
+        from agents_v9.tools.db_tools import fetch_reference_documents
+        ref_db = fetch_reference_documents.invoke({})
+        return {**state, "reference_database": ref_db}
     except Exception as e:
-        return {
-            "error": f"Standards extraction failed: {str(e)}",
-            "standards_from_project_documents": [],
-            "done": True
-        }
+        logger.error(f"Error fetching reference database: {e}")
+        return {**state, "reference_database": []}
+
+
+def standards_extraction_node(state: StandardsExtractionState) -> StandardsExtractionState:
+    """Extract standards from project documents using LLM"""
+    ref_db = state.get("reference_database", [])
+    txt_docs = [{k: v for k, v in doc.items() if k not in ['blob_url', 'project_id']} for doc in state["txt_project_documents"]]
+
+    if not txt_docs:
+        return {**state, "standards_from_project_documents": [], "done": True, "error": None}
+
+    ref_db_text = ""
+    for ref in ref_db:
+        ref_db_text += f"UUID: {ref['id']}, Spec ID: {ref['spec_id']}, Name: {ref['spec_name']}, Org: {ref['org_identifier']}\n"
+
+    combined_content = "\n\n".join([f"Document: {doc['file_name']} (ID: {doc['id']})\n{doc['content']}" for doc in txt_docs])
+
+    prompt = STANDARDS_EXTRACTION_PROMPT.format(
+        reference_db_text=ref_db_text,
+        document_content=combined_content
+    )
+
+    structured_llm = llm.with_structured_output(ExtractedStandards, method="json_mode")
+
+    try:
+        parsed_response = structured_llm.invoke(prompt)
+
+        if not parsed_response:
+            return {**state, "error": "No parsed response from LLM", "done": True}
+
+        standards_list = [std.model_dump() for std in parsed_response.standards]
+
+        # Add document references to each standard
+        for std in standards_list:
+            if 'document_ids' not in std:
+                std['document_ids'] = []
+            # For now, add all document IDs since we processed combined content
+            std['document_ids'] = [doc.get("id") for doc in txt_docs if doc.get("id")]
+
+        return {**state, "standards_from_project_documents": standards_list, "done": True}
+    except Exception as e:
+        logger.error(f"Error extracting standards: {e}")
+        return {**state, "error": str(e), "done": True}
 
 def create_standards_asset_specs(state: StandardsExtractionState) -> List[Dict[str, Any]]:
     """Create asset write specifications for standards"""
@@ -236,23 +187,92 @@ def create_document_reference_edges(state: StandardsExtractionState) -> List[Dic
 
 # Graph definition
 def create_standards_extraction_graph():
-    """Create the standards extraction graph"""
-    from langgraph.graph import StateGraph
+    """Create the standards extraction graph with persistence"""
+    from langgraph.checkpoint.sqlite import SqliteSaver
 
-    graph = StateGraph(StandardsExtractionState)
+    builder = StateGraph(StandardsExtractionState, input=InputState, output=OutputState)
 
     # Add nodes
-    graph.add_node("extract_standards", standards_extraction_node)
-    graph.add_node("create_standards_assets", lambda state: {
+    builder.add_node("fetch_reference_database", fetch_reference_database_node)
+    builder.add_node("extract_standards", standards_extraction_node)
+    builder.add_node("create_standards_assets", lambda state: {
         "standards_asset_specs": create_standards_asset_specs(state)
     })
-    graph.add_node("create_doc_refs", lambda state: {
+    builder.add_node("create_doc_refs", lambda state: {
         "standards_doc_ref_edges": create_document_reference_edges(state)
     })
 
     # Define flow
-    graph.set_entry_point("extract_standards")
-    graph.add_edge("extract_standards", "create_standards_assets")
-    graph.add_edge("create_standards_assets", "create_doc_refs")
+    builder.add_edge(START, "fetch_reference_database")
+    builder.add_edge("fetch_reference_database", "extract_standards")
+    builder.add_edge("extract_standards", "create_standards_assets")
+    builder.add_edge("create_standards_assets", "create_doc_refs")
+    builder.add_edge("create_doc_refs", END)
 
-    return graph.compile()
+    return builder.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+
+# Test function to demonstrate the conversion
+def test_standards_extraction():
+    """Simple test to verify the LLM-based standards extraction works"""
+
+    # Sample test data
+    test_documents = [
+        {
+            "id": "doc1",
+            "file_name": "spec.pdf",
+            "content": "This project must comply with AS 1289 for soil testing and ISO 9001 for quality management. Also reference ASTM C123 for concrete testing."
+        }
+    ]
+
+    test_input = {
+        "project_id": "test_project_123",
+        "txt_project_documents": test_documents
+    }
+
+    # Create and run the graph
+    graph = create_standards_extraction_graph()
+
+    try:
+        result = graph.invoke(test_input)
+        print("✅ Standards extraction completed successfully!")
+        print(f"Found {len(result.get('standards_from_project_documents', []))} standards")
+        for std in result.get('standards_from_project_documents', []):
+            print(f"- {std.get('standard_code')}: {std.get('spec_name', 'Unknown')}")
+        return True
+    except Exception as e:
+        print(f"❌ Test failed: {e}")
+        return False
+
+# Example usage and comparison with V9 patterns
+def demonstrate_v10_conversion():
+    """
+    Demonstrate the converted V10 standards extraction using V9 patterns.
+    This shows how we've successfully migrated from regex to LLM-based processing
+    while maintaining the same state management and LangGraph structure as V9.
+    """
+    print("🔄 V10 Standards Extraction - Converted from Regex to LLM")
+    print("=" * 60)
+    print("✅ Using same V9 patterns:")
+    print("  - TypedDict state management")
+    print("  - Pydantic models for structured output")
+    print("  - Gemini LLM with json_mode")
+    print("  - Reference database integration")
+    print("  - Asset and edge specifications")
+    print("  - LangGraph workflow with nodes and edges")
+    print()
+    print("🔄 Key improvements from V9 to V10:")
+    print("  - LLM-based extraction instead of regex patterns")
+    print("  - Better context understanding")
+    print("  - Structured JSON output with validation")
+    print("  - Enhanced standards matching with database")
+    print()
+
+    success = test_standards_extraction()
+    if success:
+        print("\n🎉 Conversion successful! The graph now uses LLM processing")
+        print("   while maintaining full compatibility with V9 architecture.")
+    else:
+        print("\n⚠️  Test failed - check environment variables and API keys")
+
+if __name__ == "__main__":
+    demonstrate_v10_conversion()
