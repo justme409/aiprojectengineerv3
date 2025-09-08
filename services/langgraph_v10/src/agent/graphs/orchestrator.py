@@ -42,6 +42,7 @@ class OrchestratorState(TypedDict):
     # Control
     error: Optional[str]
     done: bool
+    failed: bool  # Fail-fast flag to stop processing on errors
 
 
 class MainInputState(TypedDict):
@@ -62,6 +63,7 @@ class MainOutputState(TypedDict):
     summary: Dict[str, Any]
     error: Optional[str]
     done: bool
+    failed: bool
 
 
 """
@@ -116,20 +118,54 @@ def aggregate_errors(current_error: Optional[str], new_error: Optional[str]) -> 
     return f"{current_error}; {new_error}"
 
 # Error capture nodes for subgraphs
+def capture_document_extraction_error(state: OrchestratorState) -> Dict[str, Any]:
+    """Capture any error from document extraction subgraph and implement fail-fast"""
+    # Check if document extraction failed (no documents extracted or error present)
+    if (not state.get("txt_project_documents") or
+        state.get("error") or
+        (hasattr(state, 'failed_documents') and state.get("failed_documents"))):
+        error_msg = "Document extraction failed: " + (state.get("error") or "no documents were extracted")
+        return {
+            "error": aggregate_errors(state.get("error"), error_msg),
+            "failed": True,
+            "done": True
+        }
+    return {}
+
 def capture_project_details_error(state: OrchestratorState) -> Dict[str, Any]:
-    """Capture any error from project details subgraph"""
+    """Capture any error from project details subgraph and implement fail-fast"""
     # Since subgraphs modify state in-place, we check if project_details is empty
     # and if so, it indicates an error occurred
-    if not state.project_details and state.txt_project_documents:
+    if not state.get("project_details") and state.get("txt_project_documents"):
         error_msg = "Project details extraction failed: no project details were generated despite having documents"
-        return {"error": aggregate_errors(state.error, error_msg)}
+        return {
+            "error": aggregate_errors(state.get("error"), error_msg),
+            "failed": True,
+            "done": True
+        }
+    return {}
+
+def capture_standards_extraction_error(state: OrchestratorState) -> Dict[str, Any]:
+    """Capture any error from standards extraction subgraph and implement fail-fast"""
+    if (state.get("error") and "standards" in state.get("error", "").lower()) or \
+       not state.get("standards_from_project_documents"):
+        error_msg = "Standards extraction failed"
+        return {
+            "error": aggregate_errors(state.get("error"), error_msg),
+            "failed": True,
+            "done": True
+        }
     return {}
 
 def capture_plan_generation_error(state: OrchestratorState) -> Dict[str, Any]:
-    """Capture any error from plan generation subgraph"""
-    if not state.generated_plans and state.txt_project_documents:
+    """Capture any error from plan generation subgraph and implement fail-fast"""
+    if not state.get("generated_plans") and state.get("txt_project_documents"):
         error_msg = "Plan generation failed: no plans were generated despite having documents"
-        return {"error": aggregate_errors(state.error, error_msg)}
+        return {
+            "error": aggregate_errors(state.get("error"), error_msg),
+            "failed": True,
+            "done": True
+        }
     return {}
 
 # Node to aggregate subgraph errors and finalize state
@@ -156,28 +192,102 @@ def finalize_orchestrator_state(state: OrchestratorState) -> OrchestratorState:
         asset_specs=state.asset_specs,
         edge_specs=state.edge_specs,
         error=aggregated_error if aggregated_error else None,
-        done=True
+        done=True,
+        failed=state.get("failed", False)
+    )
+
+    return final_state
+
+# Failure finalization node
+def finalize_failure_state(state: OrchestratorState) -> OrchestratorState:
+    """Finalize the orchestrator state when a failure occurred (fail-fast)"""
+    aggregated_error = state.error or "Unknown error occurred during processing"
+
+    # Create final output state with failure status
+    final_state = OrchestratorState(
+        project_id=state.project_id,
+        document_ids=state.document_ids,
+        txt_project_documents=state.txt_project_documents,
+        document_metadata=state.document_metadata,
+        standards_from_project_documents=state.standards_from_project_documents,
+        wbs_structure=state.wbs_structure,
+        mapping_content=state.mapping_content,
+        generated_plans=state.generated_plans,
+        generated_itps=state.generated_itps,
+        project_details=state.project_details,
+        asset_specs=state.asset_specs,
+        edge_specs=state.edge_specs,
+        error=aggregated_error,
+        done=True,
+        failed=True
     )
 
     return final_state
 
 # Add error capture and finalization nodes
+builder.add_node("capture_document_extraction_error", capture_document_extraction_error)
 builder.add_node("capture_project_details_error", capture_project_details_error)
+builder.add_node("capture_standards_extraction_error", capture_standards_extraction_error)
 builder.add_node("capture_plan_generation_error", capture_plan_generation_error)
 builder.add_node("finalize", finalize_orchestrator_state)
+builder.add_node("finalize_failure", finalize_failure_state)
 
-# Define edges for sequential flow (mirrors v9 order) with error capture
+# Routing functions for conditional edges
+def route_after_document_extraction(state: OrchestratorState) -> str:
+    """Route after document extraction based on failure status"""
+    return "capture_document_extraction_error"
+
+def route_after_error_capture(state: OrchestratorState) -> str:
+    """Route after error capture based on failed flag"""
+    if state.get("failed", False):
+        return "finalize_failure"
+    return "project_details"
+
+def route_after_project_details(state: OrchestratorState) -> str:
+    """Route after project details based on failure status"""
+    return "capture_project_details_error"
+
+def route_after_project_details_error(state: OrchestratorState) -> str:
+    """Route after project details error capture"""
+    if state.get("failed", False):
+        return "finalize_failure"
+    return "standards_extraction"
+
+def route_after_standards_extraction(state: OrchestratorState) -> str:
+    """Route after standards extraction"""
+    return "capture_standards_extraction_error"
+
+def route_after_standards_error(state: OrchestratorState) -> str:
+    """Route after standards extraction error capture"""
+    if state.get("failed", False):
+        return "finalize_failure"
+    return "plan_generation"
+
+def route_after_plan_generation(state: OrchestratorState) -> str:
+    """Route after plan generation"""
+    return "capture_plan_generation_error"
+
+def route_after_plan_error(state: OrchestratorState) -> str:
+    """Route after plan generation error capture"""
+    if state.get("failed", False):
+        return "finalize_failure"
+    return "wbs_extraction"
+
+# Define edges for sequential flow with fail-fast behavior
 builder.add_edge(START, "document_extraction")
-builder.add_edge("document_extraction", "project_details")
+builder.add_edge("document_extraction", "capture_document_extraction_error")
+builder.add_conditional_edge("capture_document_extraction_error", route_after_error_capture)
 builder.add_edge("project_details", "capture_project_details_error")
-builder.add_edge("capture_project_details_error", "standards_extraction")
-builder.add_edge("standards_extraction", "plan_generation")
+builder.add_conditional_edge("capture_project_details_error", route_after_project_details_error)
+builder.add_edge("standards_extraction", "capture_standards_extraction_error")
+builder.add_conditional_edge("capture_standards_extraction_error", route_after_standards_error)
 builder.add_edge("plan_generation", "capture_plan_generation_error")
-builder.add_edge("capture_plan_generation_error", "wbs_extraction")
+builder.add_conditional_edge("capture_plan_generation_error", route_after_plan_error)
 builder.add_edge("wbs_extraction", "lbs_extraction")
 builder.add_edge("lbs_extraction", "itp_generation")
 builder.add_edge("itp_generation", "finalize")
 builder.add_edge("finalize", END)
+builder.add_edge("finalize_failure", END)
 
 # Shared v10 checkpoints database using native SqliteSaver
 # Create SqliteSaver directly with sqlite3 connection

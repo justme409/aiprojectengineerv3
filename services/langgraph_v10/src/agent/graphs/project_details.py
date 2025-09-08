@@ -224,8 +224,7 @@ def create_project_details_graph():
     graph.add_edge("create_asset_spec", END)
 
     # Inherit parent's checkpointer when used as a subgraph
-    # return graph.compile(checkpointer=True)
-    return graph.compile()
+    return graph.compile(checkpointer=True)
 
 # Description: V10 Project Details extraction converted from V9 patterns.
 # Uses LLM with structured output instead of regex patterns.

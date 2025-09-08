@@ -170,8 +170,7 @@ def create_wbs_extraction_graph():
     graph.add_edge("generate_wbs", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    # return graph.compile(checkpointer=True)
-    return graph.compile()
+    return graph.compile(checkpointer=True)
 
 def create_wbs_asset_spec(state: WbsExtractionState) -> Dict[str, Any]:
     """Create asset write specification for WBS following knowledge graph"""

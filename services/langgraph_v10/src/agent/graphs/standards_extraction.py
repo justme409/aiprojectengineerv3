@@ -221,8 +221,7 @@ def create_standards_extraction_graph():
     builder.add_edge("create_standards_assets", "create_doc_refs")
     builder.add_edge("create_doc_refs", END)
 
-    # return builder.compile(checkpointer=True)
-    return builder.compile()
+    return builder.compile(checkpointer=True)
 
 # Test function to demonstrate the conversion
 def test_standards_extraction():

@@ -231,8 +231,7 @@ def create_itp_generation_graph():
     graph.add_edge("generate_itps", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    # return graph.compile(checkpointer=True)
-    return graph.compile()
+    return graph.compile(checkpointer=True)
 
 def create_itp_asset_spec(state: ItpGenerationState) -> Dict[str, Any]:
     """Create asset write specification for ITPs following knowledge graph"""

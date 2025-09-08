@@ -203,8 +203,7 @@ def create_plan_generation_graph():
     graph.add_edge("generate_plans", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    # return graph.compile(checkpointer=True)
-    return graph.compile()
+    return graph.compile(checkpointer=True)
 
 def create_plan_asset_spec(state: PlanGenerationState) -> Dict[str, Any]:
     """Create asset write specification for plans following knowledge graph"""

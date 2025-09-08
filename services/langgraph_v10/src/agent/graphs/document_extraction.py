@@ -498,5 +498,4 @@ def create_document_extraction_graph():
     graph.add_edge("extract", "create_assets")
 
     # Inherit parent's checkpointer when embedded as a subgraph
-    # return graph.compile(checkpointer=True)
-    return graph.compile()
+    return graph.compile(checkpointer=True)
