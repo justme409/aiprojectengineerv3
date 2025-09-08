@@ -165,7 +165,7 @@ Output the complete ITP structure as a structured JSON with an "items" array.
                 logger.warning("No structured items returned for node '%s'", node_title)
                 continue
 
-            # Store LLM outputs in assets.metadata.llm_outputs per knowledge graph
+            # Store LLM outputs in content per knowledge graph
             llm_outputs = {
                 "itp": {
                     "extraction": {
@@ -221,7 +221,7 @@ def create_itp_generation_graph():
     graph.add_node("identify_targets", identify_itp_targets)
     graph.add_node("generate_itps", generate_itps)
     graph.add_node("create_asset_spec", lambda state: {
-        "asset_spec": create_itp_asset_spec(state)
+        "asset_specs": [create_itp_asset_spec(state)]
     })
 
     # Define flow following V9 patterns
@@ -231,7 +231,7 @@ def create_itp_generation_graph():
     graph.add_edge("generate_itps", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    return graph.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return graph.compile(checkpointer=True)
 
 def create_itp_asset_spec(state: ItpGenerationState) -> Dict[str, Any]:
     """Create asset write specification for ITPs following knowledge graph"""
@@ -253,6 +253,8 @@ def create_itp_asset_spec(state: ItpGenerationState) -> Dict[str, Any]:
             "type": "plan",
             "name": "Inspection and Test Plans",
             "project_id": state.project_id,
+            "approval_state": "not_required",
+            "classification": "internal",
             "content": itp_content,
             "metadata": {
                 "plan_type": "itp",

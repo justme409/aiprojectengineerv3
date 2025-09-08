@@ -267,4 +267,4 @@ def create_metadata_generator_graph():
     workflow.add_edge(START, "generate_intelligent_metadata")
     workflow.add_edge("generate_intelligent_metadata", END)
 
-    return workflow.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return workflow.compile(checkpointer=True)

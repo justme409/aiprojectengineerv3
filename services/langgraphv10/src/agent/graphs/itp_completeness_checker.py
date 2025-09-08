@@ -266,4 +266,4 @@ def create_itp_completeness_checker_graph():
     workflow.add_edge(START, "check_itp_completeness")
     workflow.add_edge("check_itp_completeness", END)
 
-    return workflow.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return workflow.compile(checkpointer=True)

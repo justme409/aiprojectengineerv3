@@ -340,7 +340,7 @@ async def extract_single_document(doc_detail: Dict[str, Any], project_id: str) -
         # Extract structured content
         structured_content = extract_structured_content(content)
 
-        # Store LLM outputs in assets.metadata.llm_outputs as per knowledge graph
+        # Store LLM outputs in content per knowledge graph
         llm_outputs = {
             "document": {
                 "summary": {
@@ -373,9 +373,8 @@ async def extract_single_document(doc_detail: Dict[str, Any], project_id: str) -
             file_name=file_name,
             content=content,
             project_id=project_id,
-                metadata={
+            metadata={
                 **metadata.dict(),
-                "llm_outputs": llm_outputs,
                 "extraction_method": "azure_document_intelligence_v4",
                 "word_count": len(content.split()),
                 "character_count": len(content)
@@ -447,6 +446,8 @@ def create_asset_write_specs(state: ExtractionState) -> List[Dict[str, Any]]:
                 "project_id": state.project_id,
                 "document_number": doc.metadata.get("document_number"),
                 "revision_code": doc.metadata.get("revision"),
+                "approval_state": "not_required",
+                "classification": "internal",
                 "content": {
                     "source_document_id": doc.id,
                     "extracted_content": doc.content,
@@ -488,4 +489,5 @@ def create_document_extraction_graph():
     graph.set_entry_point("extract")
     graph.add_edge("extract", "create_assets")
 
-    return graph.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    # Inherit parent's checkpointer when embedded as a subgraph
+    return graph.compile(checkpointer=True)

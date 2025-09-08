@@ -2,6 +2,7 @@
   "dependencies": ["."],
   "graphs": {
     "agent": "./src/agent/graph.py:graph",
+    "orchestrator": "./src/agent/graphs/orchestrator.py:create_orchestrator_graph",
     "standards_extraction": "./src/agent/graphs/standards_extraction.py:create_standards_extraction_graph",
     "wbs_extraction": "./src/agent/graphs/wbs_extraction.py:create_wbs_extraction_graph",
     "itp_generation": "./src/agent/graphs/itp_generation.py:create_itp_generation_graph",

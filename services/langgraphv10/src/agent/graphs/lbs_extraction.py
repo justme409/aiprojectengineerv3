@@ -144,7 +144,7 @@ Output the complete location-based schedule as a structured JSON with a "lot_car
             logger.warning("No structured lot cards returned")
             mapping_content = {"lot_cards": []}
         else:
-            # Store LLM outputs in assets.metadata.llm_outputs per knowledge graph
+            # Store LLM outputs in content per knowledge graph
             llm_outputs = {
                 "lbs": {
                     "extraction": {
@@ -199,7 +199,7 @@ def create_lbs_extraction_graph():
     # Add nodes following V9 patterns
     graph.add_node("generate_lot_cards", generate_lot_cards_node)
     graph.add_node("create_asset_spec", lambda state: {
-        "asset_spec": create_lbs_asset_spec(state)
+        "asset_specs": [create_lbs_asset_spec(state)]
     })
 
     # Define flow following V9 patterns
@@ -207,7 +207,7 @@ def create_lbs_extraction_graph():
     graph.add_edge("generate_lot_cards", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    return graph.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return graph.compile(checkpointer=True)
 
 def create_lbs_asset_spec(state: LbsExtractionState) -> Dict[str, Any]:
     """Create asset write specification for LBS following knowledge graph"""
@@ -219,6 +219,8 @@ def create_lbs_asset_spec(state: LbsExtractionState) -> Dict[str, Any]:
             "type": "plan",
             "name": "Location-Based Schedule",
             "project_id": state.project_id,
+            "approval_state": "not_required",
+            "classification": "internal",
             "content": state.mapping_content,
             "metadata": {
                 "plan_type": "lbs",

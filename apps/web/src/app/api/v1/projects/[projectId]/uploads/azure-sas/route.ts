@@ -24,9 +24,23 @@ export async function POST(
       return NextResponse.json({ error: 'Azure storage not configured' }, { status: 500 })
     }
 
-    const uploadUrls = await azureStorage.generateUploadUrls(files, projectId)
+    // Normalize incoming file descriptors: support { name, contentType } and { file_name, content_type }
+    const normalized = (files as any[]).map((f: any) => ({
+      name: f.name ?? f.file_name,
+      contentType: f.contentType ?? f.content_type ?? 'application/octet-stream',
+    }))
 
-    return NextResponse.json({ uploadUrls })
+    const uploadUrls = await azureStorage.generateUploadUrls(normalized, projectId)
+
+    // Return both shapes for compatibility
+    const uploads = uploadUrls.map(u => ({
+      filename: u.fileName,
+      uploadUrl: u.uploadUrl,
+      blobName: u.blobName,
+      contentType: u.contentType,
+    }))
+
+    return NextResponse.json({ uploads, uploadUrls })
   } catch (error) {
     console.error('Error generating upload URLs:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

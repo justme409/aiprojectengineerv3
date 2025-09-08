@@ -14,7 +14,11 @@
     "build": "pnpm --filter web build",
     "migrate": "pnpm --filter web db:migrate",
     "test-db": "node test-setup.js",
-    "check": "pnpm --filter web exec tsc --noEmit ; pnpm --filter web lint"
+    "check": "pnpm --filter web exec tsc --noEmit ; pnpm --filter web lint",
+    "db:up": "bash scripts/db-up.sh",
+    "db:ping": "bash scripts/db-ping.sh",
+    "web:dev": "bash scripts/web-dev.sh",
+    "langgraph:dev": "bash start-langgraph.sh"
   },
   "devDependencies": {
     "dotenv": "^16.4.5",

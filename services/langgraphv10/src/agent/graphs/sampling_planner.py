@@ -237,4 +237,4 @@ def create_sampling_planner_graph():
     workflow.add_edge(START, "generate_sampling_plan")
     workflow.add_edge("generate_sampling_plan", END)
 
-    return workflow.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return workflow.compile(checkpointer=True)

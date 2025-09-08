@@ -157,7 +157,19 @@ def create_standards_asset_specs(state: StandardsExtractionState) -> List[Dict[s
                 "type": "standard",
                 "name": std["spec_name"],
                 "project_id": state.project_id,
-                "content": std
+                "approval_state": "not_required",
+                "classification": "internal",
+                "content": {**std},
+                "metadata": {
+                    "category": "register",
+                    "tags": ["standards", "register", "compliance", "references"],
+                    "llm_outputs": {
+                        "standards_extraction": {
+                            "model": os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+                            "timestamp": "2025-01-01T00:00:00.000Z"
+                        }
+                    }
+                }
             },
             "idempotency_key": f"standard:{state.project_id}:{std['standard_code']}"
         }
@@ -196,10 +208,10 @@ def create_standards_extraction_graph():
     builder.add_node("fetch_reference_database", fetch_reference_database_node)
     builder.add_node("extract_standards", standards_extraction_node)
     builder.add_node("create_standards_assets", lambda state: {
-        "standards_asset_specs": create_standards_asset_specs(state)
+        "asset_specs": create_standards_asset_specs(state)
     })
     builder.add_node("create_doc_refs", lambda state: {
-        "standards_doc_ref_edges": create_document_reference_edges(state)
+        "edge_specs": create_document_reference_edges(state)
     })
 
     # Define flow
@@ -209,7 +221,7 @@ def create_standards_extraction_graph():
     builder.add_edge("create_standards_assets", "create_doc_refs")
     builder.add_edge("create_doc_refs", END)
 
-    return builder.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return builder.compile(checkpointer=True)
 
 # Test function to demonstrate the conversion
 def test_standards_extraction():

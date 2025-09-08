@@ -3,6 +3,7 @@ import { PrismaAdapter } from '@auth/prisma-adapter'
 import { PrismaClient } from '@prisma/client'
 import Credentials from 'next-auth/providers/credentials'
 import { compare } from 'bcrypt'
+import { pool } from '@/lib/db'
 
 const prisma = new PrismaClient()
 
@@ -49,14 +50,43 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
+      // Prefer a stable UUID from auth.users. Create if missing.
+      try {
+        const email = (user as any)?.email || (token as any)?.email
+        if (email) {
+          const result = await pool.query<{ id: string }>(
+            `WITH existing AS (
+               SELECT id FROM auth.users WHERE email = $1 LIMIT 1
+             ), created AS (
+               INSERT INTO auth.users (id, email, password_hash)
+               SELECT gen_random_uuid(), $1, NULL
+               WHERE NOT EXISTS (SELECT 1 FROM existing)
+               RETURNING id
+             )
+             SELECT id FROM created
+             UNION ALL
+             SELECT id FROM existing
+             LIMIT 1;`,
+            [email as string]
+          )
+          const authUserId = result.rows[0]?.id
+          if (authUserId) {
+            ;(token as any).id = authUserId
+            ;(token as any).authUserId = authUserId
+          }
+        }
+      } catch {
+        // Fallback silently to default token.id
+        if (user && (user as any).id) {
+          ;(token as any).id = (user as any).id
+        }
       }
       return token
     },
     async session({ session, token }) {
       if (token && session.user) {
         ;(session.user as any).id = (token as any).id as string
+        ;(session.user as any).authUserId = (token as any).authUserId as string | undefined
       }
       return session
     },

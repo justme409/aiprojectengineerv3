@@ -7,6 +7,6 @@ export default async function HomePage() {
   if (session) {
     redirect('/app/dashboard')
   } else {
-    redirect('/about') // Or landing page
+    redirect('/about')
   }
 }

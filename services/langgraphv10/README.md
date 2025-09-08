@@ -43,6 +43,38 @@ langgraph dev
 
 For more information on getting started with LangGraph Server, [see here](https://langchain-ai.github.io/langgraph/tutorials/langgraph-platform/local-server/).
 
+## Invoke and test a graph (API quick reference)
+
+1) Create a thread
+```bash
+curl -sS -X POST http://localhost:2024/threads \
+  -H 'Content-Type: application/json' \
+  -d '{"metadata":{"project_id":"<PROJECT_ID>","workflow_type":"<graph_name>"}}'
+```
+
+2) Start a run on that thread
+- Pass `assistant_id` equal to the graph name registered in `langgraph.json` (the server resolves it to the UUID).
+```bash
+curl -sS -X POST http://localhost:2024/threads/<THREAD_ID>/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"assistant_id":"<graph_name>","input":{"project_id":"<PROJECT_ID>"}}'
+```
+
+3) Stream progress (SSE)
+```bash
+curl -N -H 'Accept: text/event-stream' \
+  http://localhost:2024/threads/<THREAD_ID>/runs/<RUN_ID>/stream
+```
+
+4) Inspect checkpointed state
+```bash
+curl -sS http://localhost:2024/threads/<THREAD_ID>/state
+```
+
+Notes
+- Graph names come from `services/langgraphv10/langgraph.json` under the `graphs` section.
+- Subgraphs should be compiled with `checkpointer=True` to inherit the parent graph’s checkpointer and persist subgraph state across runs.
+
 ## How to customize
 
 1. **Define runtime context**: Modify the `Context` class in the `graph.py` file to expose the arguments you want to configure per assistant. For example, in a chatbot application you may want to define a dynamic system prompt or LLM to use. For more information on runtime context in LangGraph, [see here](https://langchain-ai.github.io/langgraph/agents/context/?h=context#static-runtime-context).

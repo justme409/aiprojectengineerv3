@@ -245,4 +245,4 @@ def create_rmp_validator_graph():
     workflow.add_edge(START, "validate_rmp")
     workflow.add_edge("validate_rmp", END)
 
-    return workflow.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return workflow.compile(checkpointer=True)

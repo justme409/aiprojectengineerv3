@@ -57,7 +57,7 @@ export default function DocumentUpload({ projectId }: DocumentUploadProps) {
 			await fetch(`/api/v1/projects/${projectId}/uploads/complete`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ document_ids: uploads.map((u: any) => u.id) })
+				body: JSON.stringify({ files: uploads.map((u: any) => ({ fileName: u.filename, blobName: u.blobName, contentType: files.find(f => f.name === u.filename)?.type, size: files.find(f => f.name === u.filename)?.size })) })
 			})
 
 			setProgress('Upload complete!')

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
+import { triggerProjectProcessingViaLangGraphEnhanced } from '@/lib/actions/langgraph-actions'
+import { runGraph } from '@/lib/actions/langgraph-server-actions'
 
 export async function POST(
   request: NextRequest,
@@ -27,36 +29,49 @@ export async function POST(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    // This would trigger the ITP generation graph
-    // For now, return a mock response
-    const mockItpDocument = {
-      id: 'mock-itp-doc-id',
-      name: 'Generated ITP Document',
-      type: 'itp_document',
-      project_id: projectId,
-      status: 'draft',
-      content: {
-        generated_from_template: templateId,
-        wbs_nodes: wbsNodeIds,
-        items: [
-          {
-            id: '1',
-            section_name: 'Concrete Works',
-            inspection_test_point: 'Concrete Placement',
-            acceptance_criteria: 'Visual inspection, no segregation',
-            specification_clause: 'AS 3600',
-            inspection_test_method: 'Visual',
-            frequency: 'Continuous',
-            responsibility: 'Site Engineer',
-            hold_witness_point: 'Witness'
-          }
-        ]
-      }
+    // Get WBS structure for the project
+    const wbsResult = await pool.query(`
+      SELECT content FROM public.asset_heads
+      WHERE project_id = $1 AND type = 'wbs'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [projectId])
+
+    if (wbsResult.rows.length === 0) {
+      return NextResponse.json({ error: 'No WBS structure found for project' }, { status: 400 })
     }
 
+    const wbsStructure = wbsResult.rows[0].content
+
+    // Filter WBS nodes if specific IDs provided
+    let filteredWbsNodes = wbsStructure?.nodes || []
+    if (wbsNodeIds && wbsNodeIds.length > 0) {
+      filteredWbsNodes = filteredWbsNodes.filter((node: any) =>
+        wbsNodeIds.includes(node.id)
+      )
+    }
+
+    // Mark nodes as requiring ITP generation
+    const itpTargets = filteredWbsNodes.map((node: any) => ({
+      ...node,
+      itp_required: true,
+      is_leaf_node: !node.children || node.children.length === 0
+    }))
+
+    // Run ITP generation graph
+    const itpRun = await runGraph('itp_generation', {
+      project_id: projectId,
+      wbs_structure: {
+        ...wbsStructure,
+        nodes: itpTargets
+      }
+    })
+
     return NextResponse.json({
-      message: 'ITP generation initiated',
-      itp_document: mockItpDocument
+      message: 'ITP generation initiated successfully',
+      run_id: itpRun.id,
+      status: itpRun.status,
+      target_nodes: itpTargets.length
     })
   } catch (error) {
     console.error('Error generating ITP:', error)

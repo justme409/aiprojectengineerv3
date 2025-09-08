@@ -161,4 +161,4 @@ def create_jurisdiction_resolver_graph():
     workflow.add_edge(START, "resolve_jurisdiction")
     workflow.add_edge("resolve_jurisdiction", END)
 
-    return workflow.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return workflow.compile(checkpointer=True)

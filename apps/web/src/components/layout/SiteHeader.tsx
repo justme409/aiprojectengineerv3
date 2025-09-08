@@ -80,9 +80,9 @@ export function SiteHeader() {
                     Sign In
                   </Button>
                 </Link>
-                <Link href="/auth/login">
+                <Link href="/auth/signup">
                   <Button size="sm">
-                    Get Started
+                    Sign Up
                   </Button>
                 </Link>
               </>

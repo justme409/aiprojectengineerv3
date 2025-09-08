@@ -151,17 +151,23 @@ def create_project_details_asset_spec(state: ProjectDetailsExtractionState) -> D
     if not state.project_details:
         return {}
 
+    # Move any llm_outputs from content into metadata.llm_outputs per storage_contract
+    content_obj = dict(state.project_details or {})
+    llm_outputs = content_obj.pop("llm_outputs", {})
+
     spec = {
         "asset": {
             "type": "plan",
             "name": state.project_details.get("project_name", "Project Details"),
             "project_id": state.project_id,
-            "content": state.project_details,
+            "approval_state": "not_required",
+            "classification": "internal",
+            "content": content_obj,
             "metadata": {
                 "plan_type": "project_details",
                 "category": "project",
                 "tags": ["project", "details"],
-                "llm_outputs": state.project_details.get("llm_outputs", {})
+                "llm_outputs": llm_outputs
             },
             "status": "draft"
         },
@@ -181,7 +187,7 @@ def create_project_details_graph():
     # Add nodes following V9 patterns
     graph.add_node("generate_and_store", generate_and_store_project_details_node)
     graph.add_node("create_asset_spec", lambda state: {
-        "asset_spec": create_project_details_asset_spec(state)
+        "asset_specs": [create_project_details_asset_spec(state)]
     })
 
     # Define flow following V9 patterns
@@ -189,7 +195,8 @@ def create_project_details_graph():
     graph.add_edge("generate_and_store", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    return graph.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    # Inherit parent's checkpointer when used as a subgraph
+    return graph.compile(checkpointer=True)
 
 # Description: V10 Project Details extraction converted from V9 patterns.
 # Uses LLM with structured output instead of regex patterns.

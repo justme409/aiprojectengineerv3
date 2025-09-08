@@ -121,7 +121,7 @@ Output the complete plan as a structured JSON with an "items" array containing a
                 logger.warning(f"No structured items returned for {plan_name}")
                 continue
 
-            # Store LLM outputs in assets.metadata.llm_outputs per knowledge graph
+            # Store LLM outputs in content per knowledge graph
             llm_outputs = {
                 "plan_generation": {
                     "extraction": {
@@ -175,7 +175,7 @@ def create_plan_generation_graph():
     # Add nodes following V9 patterns
     graph.add_node("generate_plans", generate_comprehensive_plans)
     graph.add_node("create_asset_spec", lambda state: {
-        "asset_spec": create_plan_asset_spec(state)
+        "asset_specs": [create_plan_asset_spec(state)]
     })
 
     # Define flow following V9 patterns
@@ -183,7 +183,7 @@ def create_plan_generation_graph():
     graph.add_edge("generate_plans", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    return graph.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return graph.compile(checkpointer=True)
 
 def create_plan_asset_spec(state: PlanGenerationState) -> Dict[str, Any]:
     """Create asset write specification for plans following knowledge graph"""
@@ -205,6 +205,8 @@ def create_plan_asset_spec(state: PlanGenerationState) -> Dict[str, Any]:
             "type": "plan",
             "name": "Comprehensive Management Plans",
             "project_id": state.project_id,
+            "approval_state": "not_required",
+            "classification": "internal",
             "content": plans_content,
             "metadata": {
                 "plan_type": "comprehensive_management",

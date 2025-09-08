@@ -116,7 +116,7 @@ Output the WBS as a structured JSON with a "nodes" array containing all elements
             }
         }
 
-        # Store LLM outputs in assets.metadata.llm_outputs per knowledge graph
+        # Store LLM outputs in content per knowledge graph
         llm_outputs = {
             "wbs": {
                 "extraction": {
@@ -162,7 +162,7 @@ def create_wbs_extraction_graph():
     # Add nodes following V9 patterns
     graph.add_node("generate_wbs", generate_wbs_structure_node)
     graph.add_node("create_asset_spec", lambda state: {
-        "asset_spec": create_wbs_asset_spec(state)
+        "asset_specs": [create_wbs_asset_spec(state)]
     })
 
     # Define flow following V9 patterns
@@ -170,7 +170,7 @@ def create_wbs_extraction_graph():
     graph.add_edge("generate_wbs", "create_asset_spec")
     graph.add_edge("create_asset_spec", END)
 
-    return graph.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return graph.compile(checkpointer=True)
 
 def create_wbs_asset_spec(state: WbsExtractionState) -> Dict[str, Any]:
     """Create asset write specification for WBS following knowledge graph"""
@@ -182,6 +182,8 @@ def create_wbs_asset_spec(state: WbsExtractionState) -> Dict[str, Any]:
             "type": "plan",
             "name": "Work Breakdown Structure",
             "project_id": state.project_id,
+            "approval_state": "not_required",
+            "classification": "internal",
             "content": state.wbs_structure,
             "metadata": {
                 "plan_type": "wbs",

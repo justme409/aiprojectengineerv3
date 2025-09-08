@@ -86,6 +86,11 @@ export function PublicFooter() {
                 {social.name}
               </Link>
             ))}
+            <Link href="/auth/signup">
+              <Button size="sm" variant="secondary">
+                Sign Up
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

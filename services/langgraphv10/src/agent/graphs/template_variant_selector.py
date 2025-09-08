@@ -234,4 +234,4 @@ def create_template_variant_selector_graph():
     workflow.add_edge(START, "select_templates")
     workflow.add_edge("select_templates", END)
 
-    return workflow.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return workflow.compile(checkpointer=True)

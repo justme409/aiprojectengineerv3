@@ -99,7 +99,7 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/auth/login">
+              <Link href="/auth/signup">
                 <Button size="lg" className="px-8">
                   Start Free Trial
                   <ArrowRight className="ml-2 h-4 w-4" />
@@ -196,7 +196,7 @@ export default function LandingPage() {
             Join thousands of construction professionals who trust ProjectPro for their quality assurance needs.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/auth/login">
+            <Link href="/auth/signup">
               <Button size="lg" variant="secondary" className="px-8">
                 Start Your Free Trial
                 <ArrowRight className="ml-2 h-4 w-4" />

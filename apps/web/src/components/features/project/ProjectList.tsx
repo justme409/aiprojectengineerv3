@@ -83,7 +83,7 @@ export default function ProjectList() {
             <Card key={project.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <CardTitle className="flex justify-between items-start">
-                  <span className="truncate">{project.name}</span>
+                  <span className="truncate">{project.name || `Project ${project.id.slice(0,8)}`}</span>
                   <span className={`px-2 py-1 text-xs rounded-full ${
                     project.status === 'active'
                       ? 'bg-green-100 text-green-800'

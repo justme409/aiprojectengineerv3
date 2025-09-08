@@ -230,4 +230,4 @@ def create_standards_resolver_graph():
     workflow.add_edge(START, "resolve_standards")
     workflow.add_edge("resolve_standards", END)
 
-    return workflow.compile(checkpointer=SqliteSaver.from_conn_string('checkpoints_v10.db'))
+    return workflow.compile(checkpointer=True)
