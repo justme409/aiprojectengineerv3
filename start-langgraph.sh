@@ -4,21 +4,21 @@
 # This script activates the Python venv and starts the LangGraph dev server
 
 echo "🚀 Starting LangGraph Server..."
-echo "📍 Location: services/langgraphv10"
+echo "📍 Location: services/langgraph_v10"
 echo "🌐 Server will be available at: http://localhost:2024"
 echo ""
 
 # Change to the langgraph directory
-cd services/langgraphv10 || {
-    echo "❌ Error: Could not find services/langgraphv10 directory"
+cd services/langgraph_v10 || {
+    echo "❌ Error: Could not find services/langgraph_v10 directory"
     exit 1
 }
 
 # Activate the virtual environment
 echo "🔧 Activating Python 3.11 virtual environment..."
-source langgraph_env/bin/activate || {
+source .venv/bin/activate || {
     echo "❌ Error: Could not activate virtual environment"
-    echo "💡 Make sure the venv exists: services/langgraphv10/langgraph_env"
+    echo "💡 Make sure the venv exists: services/langgraph_v10/.venv"
     exit 1
 }
 
