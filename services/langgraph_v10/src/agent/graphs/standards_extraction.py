@@ -1,10 +1,12 @@
 from langgraph.graph import StateGraph, START, END
+from langgraph.types import interrupt
 from typing import List, Dict, Any, Optional, Annotated
 from typing_extensions import TypedDict
 from pydantic import BaseModel, Field
 import os
 import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
+from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -108,8 +110,34 @@ def fetch_reference_database_node(state: StandardsExtractionState) -> StandardsE
 
 def standards_extraction_node(state: StandardsExtractionState) -> StandardsExtractionState:
     """Extract standards from project documents using LLM"""
+    # Debug: Check what type of object we're receiving
+    logger.info(f"standards_extraction_node received state type: {type(state)}")
+    logger.info(f"standards_extraction_node state keys: {list(state.keys()) if hasattr(state, 'keys') else 'No keys method'}")
+
     ref_db = state.get("reference_database", [])
-    txt_docs = [{k: v for k, v in doc.items() if k not in ['blob_url', 'project_id']} for doc in state["txt_project_documents"]]
+    # Handle both Document objects and dictionaries
+    txt_docs = []
+    for doc in state["txt_project_documents"]:
+        if hasattr(doc, 'model_dump'):
+            # Document object - convert to dict and filter
+            doc_dict = doc.model_dump()
+            txt_docs.append({k: v for k, v in doc_dict.items() if k not in ['blob_url', 'project_id']})
+        elif hasattr(doc, 'items'):
+            # Already a dictionary - just filter
+            txt_docs.append({k: v for k, v in doc.items() if k not in ['blob_url', 'project_id']})
+        else:
+            # Unknown type - try to convert or log error
+            logger.error(f"Unexpected document type: {type(doc)}, value: {doc}")
+            # Try to convert to dict if possible
+            try:
+                if hasattr(doc, '__dict__'):
+                    doc_dict = vars(doc)
+                else:
+                    doc_dict = dict(doc)
+                txt_docs.append({k: v for k, v in doc_dict.items() if k not in ['blob_url', 'project_id']})
+            except Exception as e:
+                logger.error(f"Failed to convert document to dict: {e}")
+                continue
 
     if not txt_docs:
         return {**state, "standards_from_project_documents": [], "done": True, "error": None}
@@ -133,7 +161,13 @@ def standards_extraction_node(state: StandardsExtractionState) -> StandardsExtra
         if not parsed_response:
             return {**state, "error": "No parsed response from LLM", "done": True}
 
-        standards_list = [std.model_dump() for std in parsed_response.standards]
+        # Handle both Pydantic models and dict objects
+        standards_list = []
+        for std in parsed_response.standards:
+            if hasattr(std, 'model_dump'):
+                standards_list.append(std.model_dump())
+            else:
+                standards_list.append(std)
 
         # Add document references to each standard
         for std in standards_list:
@@ -151,12 +185,12 @@ def create_standards_asset_specs(state: StandardsExtractionState) -> List[Dict[s
     """Create asset write specifications for standards"""
     specs = []
 
-    for std in state.standards_from_project_documents:
+    for std in state["standards_from_project_documents"]:
         spec = {
             "asset": {
                 "type": "standard",
                 "name": std["spec_name"],
-                "project_id": state.project_id,
+                "project_id": state["project_id"],
                 "approval_state": "not_required",
                 "classification": "internal",
                 "content": {**std},
@@ -171,7 +205,7 @@ def create_standards_asset_specs(state: StandardsExtractionState) -> List[Dict[s
                     }
                 }
             },
-            "idempotency_key": f"standard:{state.project_id}:{std['standard_code']}"
+            "idempotency_key": f"standard:{state['project_id']}:{std['standard_code']}"
         }
         specs.append(spec)
 
@@ -181,7 +215,7 @@ def create_document_reference_edges(state: StandardsExtractionState) -> List[Dic
     """Create edges linking standards to source documents"""
     edges = []
 
-    for std in state.standards_from_project_documents:
+    for std in state["standards_from_project_documents"]:
         for doc_id in std.get('document_ids', []):
             edges.append({
                 "from_asset_id": "",  # Will be set to standard asset ID
@@ -192,10 +226,45 @@ def create_document_reference_edges(state: StandardsExtractionState) -> List[Dic
                     "section_reference": std.get("section_reference"),
                     "context": std.get("context", "")[:100]
                 },
-                "idempotency_key": f"std_doc_ref:{state.project_id}:{std['standard_code']}:{doc_id}"
+                "idempotency_key": f"std_doc_ref:{state['project_id']}:{std['standard_code']}:{doc_id}"
             })
 
     return edges
+
+def persist_standards_to_database(state: StandardsExtractionState) -> Dict[str, Any]:
+    """Persist standards asset specifications to the knowledge graph database"""
+    if not state.get("standards_from_project_documents"):
+        return {"persistence_result": {"success": True, "message": "No standards to persist"}}
+
+    try:
+        # Create asset specs
+        asset_specs = create_standards_asset_specs(state)
+
+        # Convert to IdempotentAssetWriteSpec objects
+        write_specs = []
+        for spec in asset_specs:
+            write_spec = IdempotentAssetWriteSpec(
+                asset_type=spec["asset"]["type"],
+                asset_subtype="standard",
+                name=spec["asset"]["name"],
+                description="Extracted standard reference from project documents",
+                project_id=spec["asset"]["project_id"],
+                metadata=spec["asset"]["metadata"],
+                content=spec["asset"]["content"],
+                idempotency_key=spec["idempotency_key"],
+                edges=spec["edges"]
+            )
+            write_specs.append(write_spec)
+
+        # Persist to database
+        result = upsertAssetsAndEdges(write_specs)
+
+        logger.info(f"Successfully persisted {len(write_specs)} standards assets to database")
+        return {"persistence_result": result}
+
+    except Exception as e:
+        logger.error(f"Failed to persist standards assets: {e}")
+        return {"persistence_result": {"success": False, "error": str(e)}}
 
 # Graph definition
 def create_standards_extraction_graph():
@@ -213,13 +282,21 @@ def create_standards_extraction_graph():
     builder.add_node("create_doc_refs", lambda state: {
         "edge_specs": create_document_reference_edges(state)
     })
+    builder.add_node("persist_assets", persist_standards_to_database)
+    # Pause for inspection to expose subgraph state via checkpoint
+    def _pause_for_inspection(state: StandardsExtractionState) -> StandardsExtractionState:
+        interrupt("standards_extraction: inspect state and resume to continue")
+        return state
+    builder.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow
     builder.add_edge(START, "fetch_reference_database")
     builder.add_edge("fetch_reference_database", "extract_standards")
     builder.add_edge("extract_standards", "create_standards_assets")
     builder.add_edge("create_standards_assets", "create_doc_refs")
-    builder.add_edge("create_doc_refs", END)
+    builder.add_edge("create_doc_refs", "persist_assets")
+    builder.add_edge("persist_assets", "pause_for_inspection")
+    builder.add_edge("pause_for_inspection", END)
 
     return builder.compile(checkpointer=True)
 

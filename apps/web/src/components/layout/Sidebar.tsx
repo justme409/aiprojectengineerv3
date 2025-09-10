@@ -50,41 +50,6 @@ const sidebarItems = [
     icon: Map,
   },
   {
-    title: "Quality",
-    href: "/app/projects/[projectId]/quality",
-    icon: Shield,
-    children: [
-      {
-        title: "ITP Templates",
-        href: "/app/projects/[projectId]/quality/itp-templates",
-      },
-      {
-        title: "ITP Documents",
-        href: "/app/projects/[projectId]/quality/itp",
-      },
-      {
-        title: "Lots",
-        href: "/app/projects/[projectId]/quality/lots",
-      },
-      {
-        title: "Hold & Witness",
-        href: "/app/projects/[projectId]/quality/hold-witness",
-      },
-      {
-        title: "ITP Register",
-        href: "/app/projects/[projectId]/quality/itp-register",
-      },
-      {
-        title: "Records",
-        href: "/app/projects/[projectId]/quality/records",
-      },
-      {
-        title: "Primary Testing",
-        href: "/app/projects/[projectId]/quality/primary-testing",
-      },
-    ],
-  },
-  {
     title: "Inspections",
     href: "/app/projects/[projectId]/inspections",
     icon: CheckSquare,
@@ -98,6 +63,46 @@ const sidebarItems = [
     title: "Tests",
     href: "/app/projects/[projectId]/tests",
     icon: TestTube,
+  },
+  {
+    title: "Plans",
+    href: "/app/projects/[projectId]/plans",
+    icon: FileText,
+  },
+  {
+    title: "Quality",
+    href: "/app/projects/[projectId]/quality",
+    icon: Shield,
+    children: [
+      {
+        title: "ITP Templates",
+        href: "/app/projects/[projectId]/quality/itp-templates",
+      },
+      {
+        title: "ITP Documents",
+        href: "/app/projects/[projectId]/quality/itp",
+      },
+      {
+        title: "ITP Register",
+        href: "/app/projects/[projectId]/quality/itp-register",
+      },
+      {
+        title: "Lots",
+        href: "/app/projects/[projectId]/quality/lots",
+      },
+      {
+        title: "Hold & Witness",
+        href: "/app/projects/[projectId]/quality/hold-witness",
+      },
+      {
+        title: "Records",
+        href: "/app/projects/[projectId]/quality/records",
+      },
+      {
+        title: "Primary Testing",
+        href: "/app/projects/[projectId]/quality/primary-testing",
+      },
+    ],
   },
   {
     title: "HSE",

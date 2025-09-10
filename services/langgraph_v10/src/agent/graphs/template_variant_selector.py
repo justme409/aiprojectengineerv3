@@ -65,10 +65,10 @@ def select_templates_node(state: TemplateSelectorState) -> TemplateSelectorState
     """Select appropriate templates using LLM analysis - NO REGEX, NO MOCK DATA"""
 
     try:
-        docs = state.txt_project_documents or []
-        project_details = state.project_details or {}
-        wbs = state.wbs_structure or {}
-        standards = state.standards_from_project_documents or []
+        docs = state.get("txt_project_documents", []) or []
+        project_details = state.get("project_details", {}) or {}
+        wbs = state.get("wbs_structure", {}) or {}
+        standards = state.get("standards_from_project_documents", []) or []
 
         combined_content = "\n\n".join([
             f"Document: {d.get('file_name','Unknown')} (ID: {d.get('id','')})\n{d.get('content','')}"
@@ -196,9 +196,9 @@ def select_templates_node(state: TemplateSelectorState) -> TemplateSelectorState
         return TemplateSelectorState(
             project_id=state.project_id,
             txt_project_documents=state.txt_project_documents,
-            project_details=state.project_details,
-            wbs_structure=state.wbs_structure,
-            standards_from_project_documents=state.standards_from_project_documents,
+            project_details=state.get("project_details", {}),
+            wbs_structure=state.get("wbs_structure", {}),
+            standards_from_project_documents=state.get("standards_from_project_documents", []),
             template_selection={
                 "selected_templates": [t.model_dump() for t in template_result.selections],
                 "category": template_result.category,
@@ -215,9 +215,9 @@ def select_templates_node(state: TemplateSelectorState) -> TemplateSelectorState
         return TemplateSelectorState(
             project_id=state.project_id,
             txt_project_documents=state.txt_project_documents,
-            project_details=state.project_details,
-            wbs_structure=state.wbs_structure,
-            standards_from_project_documents=state.standards_from_project_documents,
+            project_details=state.get("project_details", {}),
+            wbs_structure=state.get("wbs_structure", {}),
+            standards_from_project_documents=state.get("standards_from_project_documents", []),
             template_selection=None,
             asset_specs=[],
             error=f"Template selection failed: {str(e)}"

@@ -24,14 +24,26 @@ export default function ClientProjectList() {
 
   const fetchProjects = async () => {
     try {
-      // This would be a client-specific API endpoint
-      const response = await fetch('/api/v1/client/projects')
+      // Include authentication headers for secure API access
+      const response = await fetch('/api/v1/client/projects', {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include' // Include cookies for session-based auth
+      })
+
       if (response.ok) {
         const data = await response.json()
-        setProjects(data.projects)
+        setProjects(data.projects || [])
+      } else if (response.status === 401) {
+        console.error('Authentication required')
+        // Could redirect to login here
+      } else {
+        console.error('Failed to fetch projects:', response.statusText)
       }
     } catch (error) {
       console.error('Error fetching projects:', error)
+      setProjects([]) // Set empty array on error
     } finally {
       setLoading(false)
     }

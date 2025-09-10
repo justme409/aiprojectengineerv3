@@ -20,19 +20,20 @@ export async function GET() {
 
     if (result.rows.length === 0) {
       return NextResponse.json({
-        active: false,
-        plan: null,
-        current_period_end: null,
-        cancel_at_period_end: false
+        subscription: {
+          status: 'inactive'
+        }
       })
     }
 
     const subscription = result.rows[0]
     return NextResponse.json({
-      active: subscription.status === 'active',
-      plan: subscription.plan_name,
-      current_period_end: subscription.current_period_end,
-      cancel_at_period_end: subscription.cancel_at_period_end
+      subscription: {
+        status: subscription.status,
+        plan_name: subscription.plan_name,
+        current_period_end: subscription.current_period_end,
+        cancel_at_period_end: subscription.cancel_at_period_end
+      }
     })
   } catch (error) {
     console.error('Subscription status error:', error)

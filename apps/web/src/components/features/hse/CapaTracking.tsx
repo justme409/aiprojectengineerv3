@@ -69,9 +69,59 @@ export default function CapaTracking({ projectId }: CapaTrackingProps) {
   }
 
   const calculateProgress = (capa: CAPA) => {
-    const totalActions = capa.content.corrective_actions.length + capa.content.preventive_actions.length
-    // This is a simplified calculation - in reality you'd track individual action completion
-    return capa.status === 'completed' ? 100 : Math.floor(Math.random() * 80) // Mock progress
+    // If CAPA is completed, return 100%
+    if (capa.status === 'completed') {
+      return 100
+    }
+
+    // Calculate progress based on completed actions
+    if (capa.status === 'completed') {
+      return 100
+    }
+
+    // Count total actions and completed ones
+    const correctiveActions = capa.content.corrective_actions || []
+    const preventiveActions = capa.content.preventive_actions || []
+    const totalActions = correctiveActions.length + preventiveActions.length
+
+    if (totalActions === 0) {
+      // No actions defined - use time-based estimation as fallback
+      const now = new Date()
+      const targetDate = new Date(capa.content.target_completion)
+      const createdDate = new Date(capa.created_at)
+
+      if (targetDate <= now) {
+        return 80 // Overdue items get 80% progress
+      }
+
+      const totalTime = targetDate.getTime() - createdDate.getTime()
+      const elapsedTime = now.getTime() - createdDate.getTime()
+      const timeProgress = Math.min((elapsedTime / totalTime) * 100, 90)
+      return Math.max(10, Math.floor(timeProgress))
+    }
+
+    // Count completed actions based on completion tracking
+    let completedActions = 0
+
+    // Check if actions have completion tracking
+    if (capa.content.completed_actions) {
+      completedActions = capa.content.completed_actions.length
+    } else {
+      // Estimate completion based on status and time
+      const now = new Date()
+      const targetDate = new Date(capa.content.target_completion)
+      const createdDate = new Date(capa.created_at)
+
+      if (capa.status === 'in_progress') {
+        const totalTime = targetDate.getTime() - createdDate.getTime()
+        const elapsedTime = now.getTime() - createdDate.getTime()
+        const timeRatio = Math.min(elapsedTime / totalTime, 1)
+        completedActions = Math.floor(totalActions * timeRatio * 0.8) // Assume 80% of time progress equals action completion
+      }
+    }
+
+    const progress = totalActions > 0 ? Math.floor((completedActions / totalActions) * 100) : 0
+    return Math.max(0, Math.min(95, progress)) // Cap at 95% until officially completed
   }
 
   if (loading) {

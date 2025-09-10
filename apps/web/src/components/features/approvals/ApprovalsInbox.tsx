@@ -22,9 +22,10 @@ interface ApprovalItem {
 
 interface ApprovalsInboxProps {
   projectId: string
+  userId?: string
 }
 
-export default function ApprovalsInbox({ projectId }: ApprovalsInboxProps) {
+export default function ApprovalsInbox({ projectId, userId }: ApprovalsInboxProps) {
   const [approvals, setApprovals] = useState<ApprovalItem[]>([])
   const [loading, setLoading] = useState(true)
 

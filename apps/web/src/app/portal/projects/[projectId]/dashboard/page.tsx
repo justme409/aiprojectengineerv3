@@ -1,25 +1,60 @@
 import { notFound } from 'next/navigation'
+import { getProjectById } from '@/lib/actions/project-actions'
+import { getAssets } from '@/lib/actions/asset-actions'
 
 interface PageProps {
 	params: Promise<{ projectId: string }>
 }
 
-// Mock project data - in real implementation, this would be fetched
-const getProject = (id: string) => ({
-	id,
-	name: id === '1' ? 'Highway Construction Project' : 'Bridge Rehabilitation',
-	clientName: 'State Government',
-	status: 'active',
-	progress: 75,
-	totalLots: 12,
-	completedLots: 9,
-	pendingApprovals: 2
-})
+async function getProjectMetrics(projectId: string) {
+	const project = await getProjectById(projectId)
+	if (!project) return null
+
+	// Get all assets for this project
+	const assets = await getAssets({ project_id: projectId })
+
+	// Calculate metrics
+	const lots = assets.filter(asset => asset.type === 'lot')
+	const totalLots = lots.length
+	const completedLots = lots.filter(lot => lot.status === 'completed').length
+	const activeLots = lots.filter(lot => lot.status === 'active').length
+
+	// Calculate progress based on completed vs total lots
+	const progress = totalLots > 0 ? Math.round((completedLots / totalLots) * 100) : 0
+
+	// Get pending approvals (assets with approval_state = 'pending_review')
+	const pendingApprovals = assets.filter(asset => asset.approval_state === 'pending_review').length
+
+	// Get recent activity (last 5 assets)
+	const recentActivity = assets
+		.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+		.slice(0, 5)
+		.map(asset => ({
+			id: asset.id,
+			name: asset.name,
+			type: asset.type,
+			created_at: asset.created_at
+		}))
+
+	return {
+		project,
+		metrics: {
+			totalLots,
+			completedLots,
+			activeLots,
+			progress,
+			pendingApprovals,
+			recentActivity
+		}
+	}
+}
 
 export default async function ClientDashboardPage({ params }: PageProps) {
 	const { projectId } = await params
-	const project = getProject(projectId)
-	if (!project) notFound()
+	const data = await getProjectMetrics(projectId)
+	if (!data) notFound()
+
+	const { project, metrics } = data
 
 	return (
 		<main className="min-h-screen bg-gray-50 p-6">
@@ -32,25 +67,25 @@ export default async function ClientDashboardPage({ params }: PageProps) {
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 					<div className="bg-white p-6 rounded-lg shadow">
 						<h3 className="text-lg font-medium mb-2">Project Progress</h3>
-						<p className="text-3xl font-bold text-blue-600">{project.progress}%</p>
+						<p className="text-3xl font-bold text-blue-600">{metrics.progress}%</p>
 						<div className="w-full bg-gray-200 rounded-full h-2 mt-2">
 							<div
 								className="bg-blue-600 h-2 rounded-full"
-								style={{ width: `${project.progress}%` }}
+								style={{ width: `${metrics.progress}%` }}
 							></div>
 						</div>
 					</div>
 					<div className="bg-white p-6 rounded-lg shadow">
 						<h3 className="text-lg font-medium mb-2">Total Lots</h3>
-						<p className="text-3xl font-bold text-green-600">{project.totalLots}</p>
+						<p className="text-3xl font-bold text-green-600">{metrics.totalLots}</p>
 					</div>
 					<div className="bg-white p-6 rounded-lg shadow">
 						<h3 className="text-lg font-medium mb-2">Completed Lots</h3>
-						<p className="text-3xl font-bold text-green-600">{project.completedLots}</p>
+						<p className="text-3xl font-bold text-green-600">{metrics.completedLots}</p>
 					</div>
 					<div className="bg-white p-6 rounded-lg shadow">
 						<h3 className="text-lg font-medium mb-2">Pending Approvals</h3>
-						<p className="text-3xl font-bold text-orange-600">{project.pendingApprovals}</p>
+						<p className="text-3xl font-bold text-orange-600">{metrics.pendingApprovals}</p>
 					</div>
 				</div>
 
@@ -58,9 +93,15 @@ export default async function ClientDashboardPage({ params }: PageProps) {
 					<div className="bg-white p-6 rounded-lg shadow">
 						<h3 className="text-lg font-medium mb-4">Recent Activity</h3>
 						<ul className="space-y-2">
-							<li className="text-sm text-gray-600">Lot 001 completed and approved</li>
-							<li className="text-sm text-gray-600">ITP template updated</li>
-							<li className="text-sm text-gray-600">New inspection request submitted</li>
+							{metrics.recentActivity.length > 0 ? (
+								metrics.recentActivity.map((activity) => (
+									<li key={activity.id} className="text-sm text-gray-600">
+										{activity.name} ({activity.type}) - {new Date(activity.created_at).toLocaleDateString()}
+									</li>
+								))
+							) : (
+								<li className="text-sm text-gray-600">No recent activity</li>
+							)}
 						</ul>
 					</div>
 					<div className="bg-white p-6 rounded-lg shadow">

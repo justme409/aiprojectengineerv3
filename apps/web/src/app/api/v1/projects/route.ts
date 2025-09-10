@@ -5,9 +5,16 @@ import { pool } from '@/lib/db'
 export async function GET() {
   try {
     const session = await auth()
+    console.log('Session:', session)
+    console.log('Session user:', session?.user)
+    console.log('Session user id:', (session?.user as any)?.id)
+
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    const userId = (session.user as any).id
+    console.log('Using user ID:', userId)
 
     const result = await pool.query(`
       SELECT p.*, o.name as organization_name
@@ -15,7 +22,10 @@ export async function GET() {
       JOIN public.organizations o ON o.id = p.organization_id
       JOIN public.organization_users ou ON ou.organization_id = p.organization_id AND ou.user_id = $1
       ORDER BY p.created_at DESC
-    `, [(session.user as any).id])
+    `, [userId])
+
+    console.log('Query result count:', result.rows.length)
+    console.log('Projects found:', result.rows.map(p => ({ id: p.id, name: p.name })))
 
     return NextResponse.json({ projects: result.rows })
   } catch (error) {

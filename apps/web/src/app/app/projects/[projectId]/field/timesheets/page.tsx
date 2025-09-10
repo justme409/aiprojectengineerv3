@@ -145,9 +145,7 @@ export default function TimesheetsPage() {
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Employees</option>
-              {/* Would be populated from API */}
-              <option value="emp1">John Smith</option>
-              <option value="emp2">Sarah Johnson</option>
+              {/* TODO: Populate from employees API */}
             </select>
           </div>
         </div>

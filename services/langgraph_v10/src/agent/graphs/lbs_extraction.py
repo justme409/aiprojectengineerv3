@@ -1,6 +1,8 @@
 from typing import Dict, List, Any, Optional, Literal
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
+from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
+from langgraph.types import interrupt
 import os
 import logging
 
@@ -201,11 +203,19 @@ def create_lbs_extraction_graph():
     graph.add_node("create_asset_spec", lambda state: {
         "asset_specs": [create_lbs_asset_spec(state)]
     })
+    graph.add_node("persist_assets", persist_lbs_to_database)
+    # Pause for inspection to expose subgraph state via checkpoint
+    def _pause_for_inspection(state: LbsExtractionState) -> Dict[str, Any]:
+        interrupt("lbs_extraction: inspect state and resume to continue")
+        return {}
+    graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow following V9 patterns
     graph.set_entry_point("generate_lot_cards")
     graph.add_edge("generate_lot_cards", "create_asset_spec")
-    graph.add_edge("create_asset_spec", END)
+    graph.add_edge("create_asset_spec", "persist_assets")
+    graph.add_edge("persist_assets", "pause_for_inspection")
+    graph.add_edge("pause_for_inspection", END)
 
     return graph.compile(checkpointer=True)
 
@@ -235,6 +245,38 @@ def create_lbs_asset_spec(state: LbsExtractionState) -> Dict[str, Any]:
     }
 
     return spec
+
+def persist_lbs_to_database(state: LbsExtractionState) -> Dict[str, Any]:
+    """Persist LBS asset specification to the knowledge graph database"""
+    if not state.mapping_content:
+        return {"persistence_result": {"success": True, "message": "No LBS to persist"}}
+
+    try:
+        # Create asset spec
+        asset_spec = create_lbs_asset_spec(state)
+
+        # Convert to IdempotentAssetWriteSpec object
+        write_spec = IdempotentAssetWriteSpec(
+            asset_type=asset_spec["asset"]["type"],
+            asset_subtype="lbs",
+            name=asset_spec["asset"]["name"],
+            description="Extracted Location-Based Schedule",
+            project_id=state.project_id,
+            metadata=asset_spec["asset"]["metadata"],
+            content=asset_spec["asset"]["content"],
+            idempotency_key=asset_spec["idempotency_key"],
+            edges=asset_spec["edges"]
+        )
+
+        # Persist to database
+        result = upsertAssetsAndEdges([write_spec])
+
+        logger.info("Successfully persisted LBS asset to database")
+        return {"persistence_result": result}
+
+    except Exception as e:
+        logger.error(f"Failed to persist LBS asset: {e}")
+        return {"persistence_result": {"success": False, "error": str(e)}}
 
 # Description: V10 LBS extraction converted from V9 patterns.
 # Uses LLM with structured output instead of mock data.

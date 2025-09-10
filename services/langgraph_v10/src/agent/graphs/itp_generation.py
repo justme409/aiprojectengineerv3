@@ -1,6 +1,7 @@
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.types import interrupt
 import os
 import logging
 
@@ -223,13 +224,21 @@ def create_itp_generation_graph():
     graph.add_node("create_asset_spec", lambda state: {
         "asset_specs": [create_itp_asset_spec(state)]
     })
+    graph.add_node("persist_assets", persist_itp_to_database)
+    # Pause for inspection to expose subgraph state via checkpoint
+    def _pause_for_inspection(state: ItpGenerationState) -> Dict[str, Any]:
+        interrupt("itp_generation: inspect state and resume to continue")
+        return {}
+    graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow following V9 patterns
     graph.set_entry_point("ensure_wbs")
     graph.add_edge("ensure_wbs", "identify_targets")
     graph.add_edge("identify_targets", "generate_itps")
     graph.add_edge("generate_itps", "create_asset_spec")
-    graph.add_edge("create_asset_spec", END)
+    graph.add_edge("create_asset_spec", "persist_assets")
+    graph.add_edge("persist_assets", "pause_for_inspection")
+    graph.add_edge("pause_for_inspection", END)
 
     return graph.compile(checkpointer=True)
 
@@ -275,6 +284,38 @@ def create_itp_asset_spec(state: ItpGenerationState) -> Dict[str, Any]:
     }
 
     return spec
+
+def persist_itp_to_database(state: ItpGenerationState) -> Dict[str, Any]:
+    """Persist ITP asset specification to the knowledge graph database"""
+    if not state.generated_itps:
+        return {"persistence_result": {"success": True, "message": "No ITPs to persist"}}
+
+    try:
+        # Create asset spec
+        asset_spec = create_itp_asset_spec(state)
+
+        # Convert to IdempotentAssetWriteSpec object
+        write_spec = IdempotentAssetWriteSpec(
+            asset_type=asset_spec["asset"]["type"],
+            asset_subtype="itp",
+            name=asset_spec["asset"]["name"],
+            description="Generated Inspection and Test Plans",
+            project_id=state.project_id,
+            metadata=asset_spec["asset"]["metadata"],
+            content=asset_spec["asset"]["content"],
+            idempotency_key=asset_spec["idempotency_key"],
+            edges=asset_spec["edges"]
+        )
+
+        # Persist to database
+        result = upsertAssetsAndEdges([write_spec])
+
+        logger.info("Successfully persisted ITP asset to database")
+        return {"persistence_result": result}
+
+    except Exception as e:
+        logger.error(f"Failed to persist ITP asset: {e}")
+        return {"persistence_result": {"success": False, "error": str(e)}}
 
 # Description: V10 ITP generation converted from V9 patterns.
 # Uses LLM with structured output instead of mock data.

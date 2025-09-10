@@ -51,25 +51,26 @@ const features = [
   }
 ]
 
+// Testimonials can be fetched from a CMS or database in production
 const testimonials = [
   {
-    name: "Sarah Chen",
+    name: "Quality Manager",
     role: "Quality Manager",
-    company: "BuildCorp Engineering",
+    company: "Leading Construction Firm",
     content: "ProjectPro transformed our quality management process. The ITP templates and inspection tracking have saved us countless hours.",
     rating: 5
   },
   {
-    name: "Mike Thompson",
+    name: "Site Manager",
     role: "Site Manager",
-    company: "Thompson Construction",
+    company: "Major Construction Company",
     content: "The HSE module and daily diaries have made safety reporting so much easier. Our compliance rate has improved significantly.",
     rating: 5
   },
   {
-    name: "Emma Rodriguez",
+    name: "Project Coordinator",
     role: "Project Coordinator",
-    company: "Metro Infrastructure",
+    company: "Infrastructure Developer",
     content: "The client portal has improved communication with our clients. They can now track progress in real-time.",
     rating: 5
   }

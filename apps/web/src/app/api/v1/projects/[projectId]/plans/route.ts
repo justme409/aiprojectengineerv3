@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
+import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
 
 export async function GET(
   request: NextRequest,
@@ -98,25 +99,32 @@ export async function POST(
         parent_asset_id,
         status: 'draft'
       },
-      edges: parent_asset_id ? [{
-        from_asset_id: parent_asset_id,
-        to_asset_id: '', // Will be set after asset creation
-        edge_type: 'PARENT_OF',
-        properties: {}
-      }] : [],
+      edges: [], // Edges will be created after asset creation if needed
       idempotency_key: `${type}:${path_key}:${projectId}`,
       audit_context: { action: 'create_plan_node', user_id: (session.user as any).id }
     }
 
-    // Note: This would need the graph-repo to handle the edge creation properly
-    // For now, just create the asset
-    const result = await pool.query(`
-      INSERT INTO public.assets (id, asset_uid, version, type, name, project_id, path_key, parent_asset_id, status)
-      VALUES (gen_random_uuid(), gen_random_uuid(), 1, $1, $2, $3, $4, $5, 'draft')
-      RETURNING *
-    `, [type, name, projectId, path_key, parent_asset_id])
+    // Create the asset using the graph-repo function
+    const result = await upsertAssetsAndEdges(spec, (session.user as any).id)
 
-    return NextResponse.json({ node: result.rows[0] })
+    // If there's a parent, create the edge
+    if (parent_asset_id && result.id) {
+      const edgeSpec = {
+        asset: {}, // No asset creation
+        edges: [{
+          from_asset_id: parent_asset_id,
+          to_asset_id: result.id,
+          edge_type: 'PARENT_OF',
+          properties: {}
+        }],
+        idempotency_key: `edge:${parent_asset_id}:${result.id}`,
+        audit_context: { action: 'create_plan_edge', user_id: (session.user as any).id }
+      }
+
+      await upsertAssetsAndEdges(edgeSpec, (session.user as any).id)
+    }
+
+    return NextResponse.json({ node: result })
   } catch (error) {
     console.error('Error creating plan node:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

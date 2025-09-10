@@ -69,6 +69,163 @@ export default function CorpPolicyRolesPage() {
     )
   }
 
+  const renderDocumentContent = (document: QseDocument) => {
+    const content = document.metadata?.content
+
+    if (!content) {
+      return <p>No content available.</p>
+    }
+
+    switch (document.type) {
+      case 'policy':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">{content.title || document.title}</h2>
+              {content.purpose && (
+                <p className="text-gray-600 italic mb-4">{content.purpose}</p>
+              )}
+            </div>
+
+            {content.scope && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Scope</h3>
+                <p>{content.scope}</p>
+              </div>
+            )}
+
+            {content.objectives && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Objectives</h3>
+                <ul className="list-disc pl-5">
+                  {Array.isArray(content.objectives)
+                    ? content.objectives.map((obj: string, index: number) => (
+                        <li key={index}>{obj}</li>
+                      ))
+                    : <li>{content.objectives}</li>
+                  }
+                </ul>
+              </div>
+            )}
+
+            {content.responsibilities && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Responsibilities</h3>
+                <p>{content.responsibilities}</p>
+              </div>
+            )}
+
+            {content.procedures && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Procedures</h3>
+                <p>{content.procedures}</p>
+              </div>
+            )}
+          </div>
+        )
+
+      case 'procedure':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">{content.title || document.title}</h2>
+              {content.purpose && (
+                <p className="text-gray-600 italic mb-4">{content.purpose}</p>
+              )}
+            </div>
+
+            {content.scope && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Scope</h3>
+                <p>{content.scope}</p>
+              </div>
+            )}
+
+            {content.steps && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Procedure Steps</h3>
+                <ol className="list-decimal pl-5 space-y-2">
+                  {Array.isArray(content.steps)
+                    ? content.steps.map((step: any, index: number) => (
+                        <li key={index}>
+                          {typeof step === 'string' ? step : (
+                            <div>
+                              <div className="font-medium">{step.title}</div>
+                              <div className="text-sm text-gray-600 mt-1">{step.description}</div>
+                            </div>
+                          )}
+                        </li>
+                      ))
+                    : <li>{content.steps}</li>
+                  }
+                </ol>
+              </div>
+            )}
+
+            {content.records && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Records</h3>
+                <p>{content.records}</p>
+              </div>
+            )}
+          </div>
+        )
+
+      case 'form':
+      case 'template':
+        return (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">{content.title || document.title}</h2>
+              {content.description && (
+                <p className="text-gray-600 italic mb-4">{content.description}</p>
+              )}
+            </div>
+
+            {content.fields && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Form Fields</h3>
+                <div className="space-y-3">
+                  {Array.isArray(content.fields)
+                    ? content.fields.map((field: any, index: number) => (
+                        <div key={index} className="border rounded p-3">
+                          <div className="font-medium">{field.label || field.name}</div>
+                          <div className="text-sm text-gray-600">
+                            Type: {field.type || 'text'}
+                            {field.required && <span className="text-red-500 ml-2">*</span>}
+                          </div>
+                          {field.description && (
+                            <div className="text-sm text-gray-500 mt-1">{field.description}</div>
+                          )}
+                        </div>
+                      ))
+                    : <p>{content.fields}</p>
+                  }
+                </div>
+              </div>
+            )}
+
+            {content.instructions && (
+              <div>
+                <h3 className="text-lg font-semibold mb-2">Instructions</h3>
+                <p>{content.instructions}</p>
+              </div>
+            )}
+          </div>
+        )
+
+      default:
+        // Fallback to raw content display
+        if (typeof content === 'string') {
+          return <p>{content}</p>
+        } else if (typeof content === 'object') {
+          return <pre className="whitespace-pre-wrap">{JSON.stringify(content, null, 2)}</pre>
+        } else {
+          return <p>{String(content)}</p>
+        }
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -193,11 +350,17 @@ export default function CorpPolicyRolesPage() {
 
             <div className="p-6">
               <div className="prose max-w-none">
-                <div className="whitespace-pre-wrap text-gray-700">
-                  {/* In a real implementation, this would render the document content */}
-                  This is where the policy document content would be displayed.
-                  The actual content would be rendered based on the document type and format.
-                </div>
+                {selectedDocument.metadata?.content ? (
+                  <div className="whitespace-pre-wrap text-gray-700">
+                    {renderDocumentContent(selectedDocument)}
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <FileText className="mx-auto h-12 w-12 mb-4" />
+                    <p>No content available for this document.</p>
+                    <p className="text-sm">Content may be stored externally or not yet uploaded.</p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 pt-6 border-t">

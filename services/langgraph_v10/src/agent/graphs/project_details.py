@@ -1,8 +1,10 @@
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, START, END
+from langgraph.types import interrupt
 # from langgraph.checkpoint.sqlite import SqliteSaver
 from langchain_google_genai import ChatGoogleGenerativeAI
+from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 import os
 import logging
 
@@ -46,12 +48,21 @@ class OutputState(BaseModel):
 def generate_and_store_project_details_node(state: ProjectDetailsExtractionState) -> ProjectDetailsExtractionState:
     """Extract and store project details using LLM following V9 patterns - NO REGEX, NO MOCK DATA"""
     docs = state.txt_project_documents or []
+
+    # Convert Document objects to dictionaries if needed
+    docs_dicts = []
+    for d in docs:
+        if hasattr(d, 'dict'):  # It's a Document object
+            docs_dicts.append(d.dict())
+        else:  # It's already a dictionary
+            docs_dicts.append(d)
+
     combined_content = "\n\n".join([
-        f"Document: {d.get('file_name','Unknown')} (ID: {d.get('id','')})\n{d.get('content','')}" for d in docs
+        f"Document: {d.get('file_name','Unknown')} (ID: {d.get('id','')})\n{d.get('content','')}" for d in docs_dicts
     ])
 
     # Fail fast: require non-empty documents and content
-    if not docs or not combined_content.strip():
+    if not docs_dicts or not combined_content.strip():
         error_msg = "Project Details extraction requires extracted document content; none available"
         logger.error(error_msg)
         return ProjectDetailsExtractionState(
@@ -118,7 +129,7 @@ If information is not available in the documents, note "Not specified in provide
         content.update({
             "extraction_method": "llm_structured_output",
             "llm_model": os.getenv("GEMINI_MODEL_2", "gemini-2.5-pro"),
-            "source_documents_count": len(docs),
+            "source_documents_count": len(docs_dicts),
             "extraction_timestamp": "2025-01-01T00:00:00.000Z"
         })
 
@@ -196,6 +207,38 @@ def create_project_details_asset_spec(state: ProjectDetailsExtractionState) -> D
 
     return spec
 
+def persist_project_details_to_database(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
+    """Persist project details asset specification to the knowledge graph database"""
+    if not state.project_details:
+        return {"persistence_result": {"success": True, "message": "No project details to persist"}}
+
+    try:
+        # Create asset spec
+        asset_spec = create_project_details_asset_spec(state)
+
+        # Convert to IdempotentAssetWriteSpec object
+        write_spec = IdempotentAssetWriteSpec(
+            asset_type=asset_spec["asset"]["type"],
+            asset_subtype="project_details",
+            name=asset_spec["asset"]["name"],
+            description="Extracted project details and metadata",
+            project_id=state.project_id,
+            metadata=asset_spec["asset"]["metadata"],
+            content=asset_spec["asset"]["content"],
+            idempotency_key=asset_spec["idempotency_key"],
+            edges=asset_spec["edges"]
+        )
+
+        # Persist to database
+        result = upsertAssetsAndEdges([write_spec])
+
+        logger.info("Successfully persisted project details asset to database")
+        return {"persistence_result": result}
+
+    except Exception as e:
+        logger.error(f"Failed to persist project details asset: {e}")
+        return {"persistence_result": {"success": False, "error": str(e)}}
+
 # Graph definition following V9 patterns
 def create_project_details_graph():
     """Create the project details extraction graph following V9 patterns"""
@@ -205,6 +248,11 @@ def create_project_details_graph():
 
     # Add nodes following V9 patterns
     graph.add_node("generate_and_store", generate_and_store_project_details_node)
+    # Pause for inspection to expose subgraph state via checkpoint
+    def _pause_for_inspection(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
+        interrupt("project_details: inspect state and resume to continue")
+        return {}
+    graph.add_node("pause_for_inspection", _pause_for_inspection)
     def create_asset_spec_node(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
         """Node to create asset specs, handling errors properly"""
         spec = create_project_details_asset_spec(state)
@@ -217,11 +265,14 @@ def create_project_details_graph():
         return result
 
     graph.add_node("create_asset_spec", create_asset_spec_node)
+    graph.add_node("persist_assets", persist_project_details_to_database)
 
     # Define flow following V9 patterns
     graph.set_entry_point("generate_and_store")
     graph.add_edge("generate_and_store", "create_asset_spec")
-    graph.add_edge("create_asset_spec", END)
+    graph.add_edge("create_asset_spec", "persist_assets")
+    graph.add_edge("persist_assets", "pause_for_inspection")
+    graph.add_edge("pause_for_inspection", END)
 
     # Inherit parent's checkpointer when used as a subgraph
     return graph.compile(checkpointer=True)

@@ -12,9 +12,34 @@ export default function ClientProjectsPage() {
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
-    // In a real implementation, this would fetch projects from API
-    // For now, we'll let ClientProjectList handle its own data fetching
-    setLoading(false)
+    const fetchClientProjects = async () => {
+      try {
+        const response = await fetch('/api/v1/client/projects', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include' // Include session cookies
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setProjects(data.projects || [])
+        } else if (response.status === 401) {
+          console.error('Authentication required for client projects')
+          setProjects([])
+        } else {
+          console.error('Failed to fetch client projects:', response.statusText)
+          setProjects([])
+        }
+      } catch (error) {
+        console.error('Error fetching client projects:', error)
+        setProjects([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchClientProjects()
   }, [])
 
   if (loading) {

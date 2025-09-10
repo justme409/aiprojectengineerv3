@@ -1,8 +1,10 @@
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
+from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 import os
 import logging
+from langgraph.types import interrupt
 
 logger = logging.getLogger(__name__)
 
@@ -164,11 +166,19 @@ def create_wbs_extraction_graph():
     graph.add_node("create_asset_spec", lambda state: {
         "asset_specs": [create_wbs_asset_spec(state)]
     })
+    graph.add_node("persist_assets", persist_wbs_to_database)
+    # Pause for inspection to expose subgraph state via checkpoint
+    def _pause_for_inspection(state: WbsExtractionState) -> Dict[str, Any]:
+        interrupt("wbs_extraction: inspect state and resume to continue")
+        return {}
+    graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow following V9 patterns
     graph.set_entry_point("generate_wbs")
     graph.add_edge("generate_wbs", "create_asset_spec")
-    graph.add_edge("create_asset_spec", END)
+    graph.add_edge("create_asset_spec", "persist_assets")
+    graph.add_edge("persist_assets", "pause_for_inspection")
+    graph.add_edge("pause_for_inspection", END)
 
     return graph.compile(checkpointer=True)
 
@@ -198,6 +208,38 @@ def create_wbs_asset_spec(state: WbsExtractionState) -> Dict[str, Any]:
     }
 
     return spec
+
+def persist_wbs_to_database(state: WbsExtractionState) -> Dict[str, Any]:
+    """Persist WBS asset specification to the knowledge graph database"""
+    if not state.wbs_structure:
+        return {"persistence_result": {"success": True, "message": "No WBS to persist"}}
+
+    try:
+        # Create asset spec
+        asset_spec = create_wbs_asset_spec(state)
+
+        # Convert to IdempotentAssetWriteSpec object
+        write_spec = IdempotentAssetWriteSpec(
+            asset_type=asset_spec["asset"]["type"],
+            asset_subtype="wbs",
+            name=asset_spec["asset"]["name"],
+            description="Extracted Work Breakdown Structure",
+            project_id=state.project_id,
+            metadata=asset_spec["asset"]["metadata"],
+            content=asset_spec["asset"]["content"],
+            idempotency_key=asset_spec["idempotency_key"],
+            edges=asset_spec["edges"]
+        )
+
+        # Persist to database
+        result = upsertAssetsAndEdges([write_spec])
+
+        logger.info("Successfully persisted WBS asset to database")
+        return {"persistence_result": result}
+
+    except Exception as e:
+        logger.error(f"Failed to persist WBS asset: {e}")
+        return {"persistence_result": {"success": False, "error": str(e)}}
 
 # Description: V10 WBS extraction converted from V9 patterns.
 # Uses LLM with structured output instead of regex patterns.

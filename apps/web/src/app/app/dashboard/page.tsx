@@ -4,13 +4,61 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useFeatureFlags, FeatureGate } from '@/lib/hooks/use-feature-flags'
+import { useState, useEffect } from 'react'
+
+interface DashboardMetrics {
+  activeProjects: number
+  pendingInspections: number
+  completedLots: number
+}
+
+interface RecentProject {
+  id: string
+  name: string
+  updated_at: string
+}
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const { flags, loading: flagsLoading } = useFeatureFlags()
   const router = useRouter()
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    activeProjects: 0,
+    pendingInspections: 0,
+    completedLots: 0
+  })
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
+  const [loading, setLoading] = useState(true)
 
-  if (status === 'loading' || flagsLoading) {
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!session?.user) return
+
+      try {
+        setLoading(true)
+
+        // Fetch all dashboard data from the dedicated API
+        const dashboardResponse = await fetch('/api/v1/dashboard')
+        if (dashboardResponse.ok) {
+          const dashboardData = await dashboardResponse.json()
+          setMetrics(dashboardData.metrics)
+          setRecentProjects(dashboardData.recentProjects)
+        } else {
+          console.error('Failed to fetch dashboard data')
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (session?.user) {
+      fetchDashboardData()
+    }
+  }, [session?.user])
+
+  if (status === 'loading' || flagsLoading || loading) {
     return (
       <div className="p-6">
         <div className="animate-pulse">
@@ -46,7 +94,7 @@ export default function DashboardPage() {
           <h3 className="text-lg font-semibold text-gray-900 mb-2">
             Active Projects
           </h3>
-          <p className="text-3xl font-bold text-blue-600">3</p>
+          <p className="text-3xl font-bold text-blue-600">{metrics.activeProjects}</p>
           <p className="text-gray-600 text-sm mt-1">
             Projects currently in progress
           </p>
@@ -57,7 +105,7 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Pending Inspections
             </h3>
-            <p className="text-3xl font-bold text-orange-600">12</p>
+            <p className="text-3xl font-bold text-orange-600">{metrics.pendingInspections}</p>
             <p className="text-gray-600 text-sm mt-1">
               Inspections requiring attention
             </p>
@@ -69,7 +117,7 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
               Completed Lots
             </h3>
-            <p className="text-3xl font-bold text-green-600">8</p>
+            <p className="text-3xl font-bold text-green-600">{metrics.completedLots}</p>
             <p className="text-gray-600 text-sm mt-1">
               Lots ready for handover
             </p>
@@ -83,32 +131,35 @@ export default function DashboardPage() {
             Recent Projects
           </h3>
           <div className="space-y-3">
-            <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-              <div>
-                <p className="font-medium">Highway Extension Project</p>
-                <p className="text-sm text-gray-600">Updated 2 hours ago</p>
+            {recentProjects.length > 0 ? (
+              recentProjects.map((project) => (
+                <div key={project.id} className="flex justify-between items-center p-3 bg-gray-50 rounded">
+                  <div>
+                    <p className="font-medium">{project.name}</p>
+                    <p className="text-sm text-gray-600">
+                      Updated {new Date(project.updated_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/app/projects/${project.id}/overview`}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    View →
+                  </Link>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-4 text-gray-500">
+                <p>No projects yet</p>
+                <Link
+                  href="/app/projects/new"
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                >
+                  Create your first project
+                </Link>
               </div>
-              <Link
-                href="/app/projects/project-1/overview"
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                View →
-              </Link>
-            </div>
-
-            <div className="flex justify-between items-center p-3 bg-gray-50 rounded">
-              <div>
-                <p className="font-medium">Bridge Construction</p>
-                <p className="text-sm text-gray-600">Updated 1 day ago</p>
-              </div>
-              <Link
-                href="/app/projects/project-2/overview"
-                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-              >
-                View →
-              </Link>
-            </div>
-                    </div>
+            )}
+          </div>
                   </div>
 
         <div className="bg-white rounded-lg shadow p-6">

@@ -65,51 +65,35 @@ export default function ItpTemplateEditorEnhanced({
   const [showItemForm, setShowItemForm] = useState(false)
 
   const fetchTemplate = useCallback(async () => {
-    try {
-      // In a real implementation, this would fetch from API
-      // For now, using mock data
-      const mockTemplate: ITPTemplate = {
-        id: templateId!,
-        name: 'Concrete Foundation ITP Template',
-        description: 'Inspection and Test Plan template for concrete foundation works',
-        version: '1.1',
-        status: 'approved',
-        applicabilityNotes: 'Applicable to all concrete foundation works over 50m³',
-        items: [
-          {
-            id: '1',
-            code: 'CF-001',
-            title: 'Concrete Mix Design Review',
-            description: 'Review and approval of concrete mix design',
-            pointType: 'hold',
-            acceptanceCriteria: 'Mix design meets specification requirements',
-            requiredRecords: ['Mix Design Certificate', 'Trial Batch Results'],
-            slaHours: 24,
-            jurisdictionRules: ['AS 1288', 'AS 3600'],
-          },
-          {
-            id: '2',
-            code: 'CF-002',
-            title: 'Formwork Inspection',
-            description: 'Inspection of formwork prior to concrete pour',
-            pointType: 'witness',
-            acceptanceCriteria: 'Formwork alignment within tolerance, properly secured',
-            requiredRecords: ['Formwork Inspection Checklist'],
-            slaHours: 4,
-            jurisdictionRules: ['AS 3610'],
-          },
-        ],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
+    if (!templateId) return
 
-      setTemplate(mockTemplate)
+    try {
+      const response = await fetch(`/api/v1/itp?projectId=${projectId}&type=template`)
+      if (response.ok) {
+        const data = await response.json()
+        const templateData = data.itp.find((t: any) => t.id === templateId)
+
+        if (templateData) {
+          const itpTemplate: ITPTemplate = {
+            id: templateData.id,
+            name: templateData.name,
+            description: templateData.content?.description || '',
+            version: templateData.content?.version || '1.0',
+            status: templateData.status,
+            applicabilityNotes: templateData.content?.applicabilityNotes || '',
+            items: templateData.content?.items || [],
+            createdAt: templateData.created_at,
+            updatedAt: templateData.updated_at,
+          }
+          setTemplate(itpTemplate)
+        }
+      }
     } catch (error) {
       console.error('Error fetching template:', error)
     } finally {
       setLoading(false)
     }
-  }, [templateId])
+  }, [templateId, projectId])
 
   useEffect(() => {
     if (templateId) {
@@ -119,11 +103,51 @@ export default function ItpTemplateEditorEnhanced({
 
   const handleSave = async () => {
     try {
-      // In a real implementation, this would save to API
+      const content = {
+        description: template.description,
+        version: template.version,
+        applicabilityNotes: template.applicabilityNotes,
+        items: template.items
+      }
+
+      if (templateId) {
+        // Update existing template
+        const response = await fetch('/api/v1/itp', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: templateId,
+            content,
+            status: template.status
+          })
+        })
+
+        if (response.ok) {
+          console.log('Template updated successfully')
+        }
+      } else {
+        // Create new template
+        const response = await fetch('/api/v1/itp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'itp_template',
+            name: template.name,
+            projectId,
+            content
+          })
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          setTemplate(prev => ({ ...prev, id: data.id }))
+          console.log('Template created successfully')
+        }
+      }
+
       if (onSave) {
         onSave(template)
       }
-      console.log('Template saved:', template)
     } catch (error) {
       console.error('Error saving template:', error)
     }

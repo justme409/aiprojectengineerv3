@@ -1,8 +1,10 @@
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
+from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 import os
 import logging
+from langgraph.types import interrupt
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +55,26 @@ class OutputState(BaseModel):
 
 def generate_comprehensive_plans(state: PlanGenerationState) -> PlanGenerationState:
     """Generate comprehensive management plans using LLM following V9 patterns - NO MOCK DATA"""
-    docs = state.txt_project_documents or []
+    # Convert Document objects to dictionaries if needed
+    raw_docs = state.txt_project_documents or []
+    docs = []
+    for doc in raw_docs:
+        if hasattr(doc, 'model_dump'):
+            # It's a Document object - convert to dict
+            docs.append(doc.model_dump())
+        elif hasattr(doc, 'items'):
+            # It's already a dictionary
+            docs.append(doc)
+        else:
+            # Unknown type - try to convert
+            try:
+                if hasattr(doc, '__dict__'):
+                    docs.append(vars(doc))
+                else:
+                    docs.append(dict(doc))
+            except Exception as e:
+                logger.error(f"Failed to convert document to dict: {e}")
+                continue
     combined_content = "\n\n".join([
         f"Document: {d.get('file_name','Unknown')} (ID: {d.get('id','')})\n{d.get('content','')}" for d in docs
     ])
@@ -64,7 +85,7 @@ def generate_comprehensive_plans(state: PlanGenerationState) -> PlanGenerationSt
         logger.error(error_msg)
         return PlanGenerationState(
             project_id=state.project_id,
-            txt_project_documents=state.txt_project_documents,
+            txt_project_documents=docs,  # Use the converted docs
             plan_type=state.plan_type,
             generated_plans=[],
             error=error_msg
@@ -171,7 +192,7 @@ Output the complete plan as a structured JSON with an "items" array containing a
 
     return PlanGenerationState(
         project_id=state.project_id,
-        txt_project_documents=state.txt_project_documents,
+        txt_project_documents=docs,  # Use the converted docs
         plan_type=state.plan_type,
         generated_plans=generated_plans,
         error=error
@@ -187,6 +208,11 @@ def create_plan_generation_graph():
 
     # Add nodes following V9 patterns
     graph.add_node("generate_plans", generate_comprehensive_plans)
+    # Pause for inspection to expose subgraph state via checkpoint
+    def _pause_for_inspection(state: PlanGenerationState) -> Dict[str, Any]:
+        interrupt("plan_generation: inspect state and resume to continue")
+        return {}
+    graph.add_node("pause_for_inspection", _pause_for_inspection)
     def create_asset_spec_node(state: PlanGenerationState) -> Dict[str, Any]:
         """Node to create asset specs, handling errors properly"""
         spec = create_plan_asset_spec(state)
@@ -197,11 +223,14 @@ def create_plan_generation_graph():
         return result
 
     graph.add_node("create_asset_spec", create_asset_spec_node)
+    graph.add_node("persist_assets", persist_plans_to_database)
 
     # Define flow following V9 patterns
     graph.set_entry_point("generate_plans")
     graph.add_edge("generate_plans", "create_asset_spec")
-    graph.add_edge("create_asset_spec", END)
+    graph.add_edge("create_asset_spec", "persist_assets")
+    graph.add_edge("persist_assets", "pause_for_inspection")
+    graph.add_edge("pause_for_inspection", END)
 
     return graph.compile(checkpointer=True)
 
@@ -247,6 +276,38 @@ def create_plan_asset_spec(state: PlanGenerationState) -> Dict[str, Any]:
     }
 
     return spec
+
+def persist_plans_to_database(state: PlanGenerationState) -> Dict[str, Any]:
+    """Persist plans asset specification to the knowledge graph database"""
+    if not state.generated_plans:
+        return {"persistence_result": {"success": True, "message": "No plans to persist"}}
+
+    try:
+        # Create asset spec
+        asset_spec = create_plan_asset_spec(state)
+
+        # Convert to IdempotentAssetWriteSpec object
+        write_spec = IdempotentAssetWriteSpec(
+            asset_type=asset_spec["asset"]["type"],
+            asset_subtype="management_plans",
+            name=asset_spec["asset"]["name"],
+            description="Generated comprehensive management plans",
+            project_id=state.project_id,
+            metadata=asset_spec["asset"]["metadata"],
+            content=asset_spec["asset"]["content"],
+            idempotency_key=asset_spec["idempotency_key"],
+            edges=asset_spec["edges"]
+        )
+
+        # Persist to database
+        result = upsertAssetsAndEdges([write_spec])
+
+        logger.info("Successfully persisted management plans asset to database")
+        return {"persistence_result": result}
+
+    except Exception as e:
+        logger.error(f"Failed to persist management plans asset: {e}")
+        return {"persistence_result": {"success": False, "error": str(e)}}
 
 # Description: V10 Plan generation converted from V9 patterns.
 # Uses LLM with structured output instead of mock data.

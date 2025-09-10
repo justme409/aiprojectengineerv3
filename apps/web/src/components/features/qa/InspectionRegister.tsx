@@ -8,12 +8,36 @@ interface InspectionRegisterProps {
 	projectId: string
 }
 
+interface IRFormData {
+	checkpoint_id: string
+	name: string
+	description: string
+	sla_hours: number
+	scheduled_at: string
+	lot_asset_id: string
+	wbs_node_asset_id: string
+	lbs_node_asset_id: string
+}
+
 export default function InspectionRegister({ projectId }: InspectionRegisterProps) {
 	const { data, mutate } = useSWR(`/api/v1/inspections?project_id=${projectId}`, fetcher)
 	const inspections = data?.data || []
 
 	const [filter, setFilter] = useState('')
 	const [statusFilter, setStatusFilter] = useState('all')
+	const [showCreateModal, setShowCreateModal] = useState(false)
+	const [isSubmitting, setIsSubmitting] = useState(false)
+
+	const [formData, setFormData] = useState<IRFormData>({
+		checkpoint_id: '',
+		name: '',
+		description: '',
+		sla_hours: 24,
+		scheduled_at: '',
+		lot_asset_id: '',
+		wbs_node_asset_id: '',
+		lbs_node_asset_id: ''
+	})
 
 	const filteredInspections = inspections.filter((ir: any) => {
 		const matchesText = ir.content?.checkpoint_id?.toLowerCase().includes(filter.toLowerCase()) ||
@@ -22,9 +46,63 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 		return matchesText && matchesStatus
 	})
 
-	const handleCreateIR = async () => {
-		// Placeholder for IR creation modal
-		alert('IR creation modal would open here')
+	const handleCreateIR = () => {
+		setShowCreateModal(true)
+	}
+
+	const handleSubmitIR = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setIsSubmitting(true)
+
+		try {
+			const irData = {
+				type: 'inspection_request',
+				name: formData.name,
+				project_id: projectId,
+				content: {
+					checkpoint_id: formData.checkpoint_id,
+					description: formData.description,
+					sla_hours: formData.sla_hours,
+					sla_due_at: formData.scheduled_at ? new Date(new Date(formData.scheduled_at).getTime() + (formData.sla_hours * 60 * 60 * 1000)).toISOString() : null,
+					scheduled_at: formData.scheduled_at || null,
+					lot_asset_id: formData.lot_asset_id || null,
+					wbs_node_asset_id: formData.wbs_node_asset_id || null,
+					lbs_node_asset_id: formData.lbs_node_asset_id || null
+				}
+			}
+
+			const response = await fetch('/api/v1/assets', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					asset: irData,
+					idempotency_key: `ir:${formData.checkpoint_id}:${Date.now()}`
+				})
+			})
+
+			if (response.ok) {
+				mutate() // Refresh the data
+				setShowCreateModal(false)
+				setFormData({
+					checkpoint_id: '',
+					name: '',
+					description: '',
+					sla_hours: 24,
+					scheduled_at: '',
+					lot_asset_id: '',
+					wbs_node_asset_id: '',
+					lbs_node_asset_id: ''
+				})
+			}
+		} catch (error) {
+			console.error('Error creating IR:', error)
+		} finally {
+			setIsSubmitting(false)
+		}
+	}
+
+	const handleInputChange = (field: keyof IRFormData, value: string | number) => {
+		setFormData(prev => ({ ...prev, [field]: value }))
 	}
 
 	return (
@@ -103,6 +181,153 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 			{filteredInspections.length === 0 && (
 				<div className="text-center py-8 text-gray-500">
 					No inspection requests found. Create inspection requests for quality checkpoints.
+				</div>
+			)}
+
+			{/* Create IR Modal */}
+			{showCreateModal && (
+				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+					<div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+						<div className="p-6 border-b">
+							<div className="flex items-center justify-between">
+								<h2 className="text-2xl font-bold text-gray-900">
+									Create Inspection Request
+								</h2>
+								<button
+									onClick={() => setShowCreateModal(false)}
+									className="text-gray-400 hover:text-gray-600"
+								>
+									✕
+								</button>
+							</div>
+						</div>
+
+						<form onSubmit={handleSubmitIR} className="p-6 space-y-4">
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										Checkpoint ID *
+									</label>
+									<input
+										type="text"
+										required
+										value={formData.checkpoint_id}
+										onChange={(e) => handleInputChange('checkpoint_id', e.target.value)}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										placeholder="e.g., IR-001"
+									/>
+								</div>
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										SLA Hours
+									</label>
+									<input
+										type="number"
+										value={formData.sla_hours}
+										onChange={(e) => handleInputChange('sla_hours', parseInt(e.target.value))}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										min="1"
+									/>
+								</div>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-1">
+									Request Name *
+								</label>
+								<input
+									type="text"
+									required
+									value={formData.name}
+									onChange={(e) => handleInputChange('name', e.target.value)}
+									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+									placeholder="Inspection request title"
+								/>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-1">
+									Description
+								</label>
+								<textarea
+									value={formData.description}
+									onChange={(e) => handleInputChange('description', e.target.value)}
+									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+									rows={3}
+									placeholder="Describe the inspection requirements"
+								/>
+							</div>
+
+							<div>
+								<label className="block text-sm font-medium text-gray-700 mb-1">
+									Scheduled Date/Time
+								</label>
+								<input
+									type="datetime-local"
+									value={formData.scheduled_at}
+									onChange={(e) => handleInputChange('scheduled_at', e.target.value)}
+									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+								/>
+							</div>
+
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										Lot Asset ID
+									</label>
+									<input
+										type="text"
+										value={formData.lot_asset_id}
+										onChange={(e) => handleInputChange('lot_asset_id', e.target.value)}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										placeholder="UUID of related lot"
+									/>
+								</div>
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										WBS Node ID
+									</label>
+									<input
+										type="text"
+										value={formData.wbs_node_asset_id}
+										onChange={(e) => handleInputChange('wbs_node_asset_id', e.target.value)}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										placeholder="UUID of WBS node"
+									/>
+								</div>
+								<div>
+									<label className="block text-sm font-medium text-gray-700 mb-1">
+										LBS Node ID
+									</label>
+									<input
+										type="text"
+										value={formData.lbs_node_asset_id}
+										onChange={(e) => handleInputChange('lbs_node_asset_id', e.target.value)}
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										placeholder="UUID of LBS node"
+									/>
+								</div>
+							</div>
+
+							<div className="flex justify-end gap-3 pt-4 border-t">
+								<button
+									type="button"
+									onClick={() => setShowCreateModal(false)}
+									className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+									disabled={isSubmitting}
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+									disabled={isSubmitting}
+								>
+									{isSubmitting ? 'Creating...' : 'Create Inspection Request'}
+								</button>
+							</div>
+						</form>
+					</div>
 				</div>
 			)}
 		</div>
