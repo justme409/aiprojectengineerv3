@@ -13,7 +13,6 @@ from agent.graphs.wbs_extraction import create_wbs_extraction_graph
 from agent.graphs.lbs_extraction import create_lbs_extraction_graph
 from agent.graphs.itp_generation import create_itp_generation_graph
 from agent.graphs.standards_extraction import create_standards_extraction_graph
-from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 
 
 class OrchestratorState(TypedDict):
@@ -84,41 +83,6 @@ interrupts/checkpointing. Errors are not aggregated or propagated here;
 inspect subgraph checkpoints via API when interrupted.
 """
 
-def persist_all_assets_to_database(state: OrchestratorState) -> Dict[str, Any]:
-    """Persist all accumulated asset specifications to the knowledge graph database"""
-    if not state.get("asset_specs"):
-        return {"persistence_result": {"success": True, "message": "No assets to persist"}}
-
-    try:
-        # Convert all asset_specs to IdempotentAssetWriteSpec objects
-        write_specs = []
-        for spec in state["asset_specs"]:
-            if spec:  # Skip empty specs
-                write_spec = IdempotentAssetWriteSpec(
-                    asset_type=spec["asset"]["type"],
-                    asset_subtype=spec["asset"].get("name", "unknown").lower().replace(" ", "_"),
-                    name=spec["asset"]["name"],
-                    description=f"Orchestrator-generated asset: {spec['asset']['name']}",
-                    project_id=state["project_id"],
-                    metadata=spec["asset"].get("metadata", {}),
-                    content=spec["asset"].get("content", {}),
-                    idempotency_key=spec["idempotency_key"],
-                    edges=spec.get("edges", [])
-                )
-                write_specs.append(write_spec)
-
-        # Persist all assets to database in batch
-        if write_specs:
-            result = upsertAssetsAndEdges(write_specs)
-            print(f"Successfully persisted {len(write_specs)} assets to database")
-            return {"persistence_result": result}
-        else:
-            return {"persistence_result": {"success": True, "message": "No valid assets to persist"}}
-
-    except Exception as e:
-        print(f"Failed to persist assets: {e}")
-        return {"persistence_result": {"success": False, "error": str(e)}}
-
 # Compile subgraphs and add as nodes
 builder.add_node("document_extraction", create_document_extraction_graph())
 builder.add_node("project_details", create_project_details_graph())
@@ -164,9 +128,7 @@ builder.add_edge("standards_extraction", "plan_generation")
 builder.add_edge("plan_generation", "wbs_extraction")
 builder.add_edge("wbs_extraction", "lbs_extraction")
 builder.add_edge("lbs_extraction", "itp_generation")
-builder.add_node("persist_all_assets", persist_all_assets_to_database)
-builder.add_edge("itp_generation", "persist_all_assets")
-builder.add_edge("persist_all_assets", END)
+builder.add_edge("itp_generation", END)
 
 # Shared v10 checkpoints database using native SqliteSaver
 # Create SqliteSaver directly with sqlite3 connection

@@ -24,6 +24,20 @@ export default function WbsView({ projectId }: WbsViewProps) {
 
   const fetchWbsData = useCallback(async () => {
     try {
+      // First try to get the WBS plan asset directly
+      const assetResponse = await fetch(`/api/v1/assets?projectId=${projectId}&type=plan`)
+      if (assetResponse.ok) {
+        const assetData = await assetResponse.json()
+        const wbsAsset = assetData.assets?.find((asset: any) => asset.subtype === 'wbs')
+
+        if (wbsAsset && wbsAsset.content?.nodes) {
+          setWbsData(wbsAsset.content.nodes)
+          setLoading(false)
+          return
+        }
+      }
+
+      // Fallback to the original API call
       const response = await fetch(`/api/v1/projects/${projectId}/plans?type=wbs`)
       if (response.ok) {
         const data = await response.json()

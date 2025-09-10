@@ -7,6 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 import os
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,11 @@ class ProjectDetails(BaseModel):
     """Pydantic model for project details following V9 patterns"""
     project_name: Optional[str] = None
     project_address: Optional[str] = Field(default=None, description="Physical address of the works/site")
+    state_territory: Optional[str] = Field(default=None, description="State/territory where project is located (NSW, QLD, SA, TAS, VIC)")
+    jurisdiction: Optional[str] = Field(default=None, description="Jurisdiction code matching compliance packs (NSW, QLD, SA, TAS, VIC)")
+    client: Optional[str] = Field(default=None, description="Client/owner organization name")
+    local_council: Optional[str] = Field(default=None, description="Local council authority (if explicitly mentioned in documents)")
+    regulatory_framework: Optional[str] = Field(default=None, description="Regulatory framework mentioned in documents (e.g., Work Health and Safety Act)")
     html: Optional[str] = Field(default=None, description="HTML content for the project details body")
 
 class ProjectDetailsExtractionState(BaseModel):
@@ -86,17 +92,28 @@ Extract and format comprehensive project details from the provided documents. In
 PROJECT DOCUMENTS:
 {combined_content}{formatting_hint}
 
+CRITICAL JURISDICTION MAPPING:
+- Jurisdiction must be one of: NSW, QLD, SA, TAS, VIC (exactly matching compliance pack codes)
+- Determine jurisdiction from explicit mentions in documents (state/territory references, authority names, etc.)
+- If jurisdiction cannot be clearly determined, leave as null rather than guessing
+- State/Territory should be the full name (New South Wales, Queensland, etc.)
+
 Extract the following information and format it as structured HTML with proper headings and tables:
 
 1. **Project Identification**
    - Project name/title
    - Project address/location
-   - Project description/scope summary
+   - State/Territory (full name: New South Wales, Queensland, South Australia, Tasmania, Victoria)
+   - Jurisdiction (NSW, QLD, SA, TAS, VIC - must match compliance pack codes exactly)
+   - Client/Owner organization name
+   - Local council authority (if explicitly mentioned)
+   - Regulatory framework (e.g., Work Health and Safety Act, specific legislation mentioned)
 
 2. **Project Parties**
-   - Client/Owner information
+   - Client/Owner information (full organization name)
    - Contractor details
    - Consultant/Engineer information
+   - Local council authority details
    - Any other relevant parties
 
 3. **Contract Information**
@@ -109,12 +126,20 @@ Extract the following information and format it as structured HTML with proper h
    - Key deliverables
    - Quality requirements
    - Safety requirements
+   - Regulatory compliance requirements
 
 Format the output as clean, professional HTML with:
 - Proper heading hierarchy (h1, h2, h3)
 - Tables for structured data (dates, parties, etc.)
 - Clear sections and subsections
 - Professional language suitable for construction documentation
+
+JURISDICTION VALIDATION:
+- NSW: References to TfNSW, Transport for NSW, Sydney, etc.
+- QLD: References to TMR, Department of Transport and Main Roads, Brisbane, etc.
+- SA: References to DIT, Department of Infrastructure and Transport, Adelaide, etc.
+- TAS: References to DSG, Department of State Growth, Hobart, etc.
+- VIC: References to VicRoads, Department of Transport, Melbourne, etc.
 
 If information is not available in the documents, note "Not specified in provided documents" rather than making assumptions.
 """
@@ -125,32 +150,37 @@ If information is not available in the documents, note "Not specified in provide
         response: ProjectDetails = structured_llm.invoke(prompt)
         content = response.dict()
 
+        # Generate actual timestamp
+        actual_timestamp = datetime.utcnow().isoformat() + "Z"
+
         # Add metadata for knowledge graph compliance
+        actual_model = os.getenv("GEMINI_MODEL_2", "gemini-2.5-pro")
         content.update({
             "extraction_method": "llm_structured_output",
-            "llm_model": os.getenv("GEMINI_MODEL_2", "gemini-2.5-pro"),
+            "llm_model": actual_model,  # Use actual model from env var
             "source_documents_count": len(docs_dicts),
-            "extraction_timestamp": "2025-01-01T00:00:00.000Z"
+            "extraction_timestamp": actual_timestamp
         })
 
         # Store LLM outputs in assets.metadata.llm_outputs per knowledge graph
+        # 1:1 mapping with content fields
         llm_outputs = {
             "project_details": {
                 "extraction": {
-                    "model": os.getenv("GEMINI_MODEL_2", "gemini-2.5-pro"),
-                    "timestamp": "2025-01-01T00:00:00.000Z",
-                    "confidence": 0.85,
+                    "model": actual_model,  # Use actual model from env var
+                    "timestamp": actual_timestamp,
+                    "confidence": "-",  # Use dash instead of hardcoded value
                     "method": "structured_output"
                 },
-                "summary": {
-                    "short": f"Project: {content.get('project_name', 'Unknown')}",
-                    "executive": f"Construction project details extracted from {len(docs)} documents",
-                    "technical": "LLM-based extraction of project metadata, parties, dates, and scope information"
-                },
+                "summary": content.get("html", ""),  # 1:1 mapping with html field
                 "entities": {
-                    "organizations": [],  # Could be populated from parties
-                    "persons": [],
-                    "locations": [content.get('project_address')] if content.get('project_address') else []
+                    "organizations": [content.get("client")] if content.get("client") else [],
+                    "persons": [],  # Could be populated from parties if extracted
+                    "locations": [content.get("project_address")] if content.get("project_address") else [],
+                    "jurisdictions": [content.get("jurisdiction")] if content.get("jurisdiction") else [],
+                    "state_territories": [content.get("state_territory")] if content.get("state_territory") else [],
+                    "local_councils": [content.get("local_council")] if content.get("local_council") else [],
+                    "regulatory_frameworks": [content.get("regulatory_framework")] if content.get("regulatory_framework") else []
                 }
             }
         }
@@ -187,17 +217,16 @@ def create_project_details_asset_spec(state: ProjectDetailsExtractionState) -> D
 
     spec = {
         "asset": {
-            "type": "plan",
+            "type": "project",
             "name": state.project_details.get("project_name", "Project Details"),
             "project_id": state.project_id,
             "approval_state": "not_required",
             "classification": "internal",
             "content": content_obj,
             "metadata": {
-                "plan_type": "project_details",
-                "category": "project",
-                "tags": ["project", "details"],
-                "llm_outputs": llm_outputs
+                "tags": ["project", "details", "metadata"],
+                "llm_outputs": llm_outputs,
+                "extraction_type": "project_details"
             },
             "status": "draft"
         },

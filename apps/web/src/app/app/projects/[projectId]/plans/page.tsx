@@ -23,12 +23,19 @@ import {
 interface PlanItem {
   id: string
   title: string
-  description: string
-  type: string
-  status: 'draft' | 'approved' | 'pending_review'
-  lastUpdated: string
+  description?: string
+  type?: string
+  status?: 'draft' | 'approved' | 'pending_review'
+  lastUpdated?: string
   updatedBy?: string
   documentCount?: number
+  item_no?: string
+  label?: string
+  content?: string | any
+  content_type?: string
+  parentId?: string
+  thinking?: string
+  url?: string
 }
 
 interface ManagementPlan {
@@ -74,6 +81,7 @@ export default function ProjectPlansPage() {
   const [plans, setPlans] = useState<ManagementPlan[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedPlanType, setSelectedPlanType] = useState<string>('pqp')
+  const [viewingPlan, setViewingPlan] = useState<ManagementPlan | null>(null)
 
   useEffect(() => {
     fetchPlans()
@@ -83,12 +91,16 @@ export default function ProjectPlansPage() {
     try {
       setLoading(true)
       // Fetch existing plans from assets
-      const response = await fetch(`/api/v1/assets?project_id=${projectId}&type=plan`)
+      const response = await fetch(`/api/v1/assets?projectId=${projectId}&type=plan`)
       if (response.ok) {
         const data = await response.json()
+        console.log('API Response:', data)
         // Transform assets into management plans format
         const transformedPlans = transformAssetsToPlans(data.assets || [])
+        console.log('Transformed plans:', transformedPlans)
         setPlans(transformedPlans)
+      } else {
+        console.error('API response not ok:', response.status, response.statusText)
       }
     } catch (error) {
       console.error('Error fetching plans:', error)
@@ -98,40 +110,52 @@ export default function ProjectPlansPage() {
   }
 
   const transformAssetsToPlans = (assets: any[]): ManagementPlan[] => {
-    // Group assets by plan type and create management plan objects
-    const planGroups: { [key: string]: any[] } = {}
+    const plans: ManagementPlan[] = []
 
     assets.forEach(asset => {
-      const planType = asset.content?.plan_type || 'pqp'
-      if (!planGroups[planType]) {
-        planGroups[planType] = []
+      // Handle management_plans asset (contains multiple plan types)
+      if (asset.subtype === 'management_plans' && asset.content?.plans) {
+        asset.content.plans.forEach((planData: any) => {
+          const planType = planData.plan_type
+          console.log(`Processing ${planType} plan:`, planData.plan_name, planData.plan_items?.length || 0, 'items')
+          plans.push({
+            id: `${planType}-${projectId}`,
+            type: planType as 'pqp' | 'emp' | 'ohsmp' | 'tmp',
+            title: planTypes[planType as keyof typeof planTypes]?.title || `${planType.toUpperCase()} Plan`,
+            description: planTypes[planType as keyof typeof planTypes]?.description || planData.plan_name || '',
+            status: asset.status || 'draft',
+            generatedAt: asset.created_at,
+            items: planData.plan_items || []
+          })
+        })
       }
-      planGroups[planType].push(asset)
+      // Handle individual plan assets
+      else if (asset.type === 'plan' && asset.subtype !== 'management_plans') {
+        const planType = asset.subtype === 'wbs' ? 'pqp' : asset.subtype || 'pqp'
+        plans.push({
+          id: asset.id,
+          type: planType as 'pqp' | 'emp' | 'ohsmp' | 'tmp',
+          title: asset.name,
+          description: asset.content?.description || planTypes[planType as keyof typeof planTypes]?.description || '',
+          status: asset.status || 'draft',
+          generatedAt: asset.created_at,
+          items: asset.content?.items || asset.content?.sections || []
+        })
+      }
     })
 
-    return Object.entries(planGroups).map(([type, assets]) => ({
-      id: `${type}-${projectId}`,
-      type: type as 'pqp' | 'emp' | 'ohsmp' | 'tmp',
-      title: planTypes[type as keyof typeof planTypes]?.title || 'Management Plan',
-      description: planTypes[type as keyof typeof planTypes]?.description || '',
-      status: assets[0]?.status || 'draft',
-      generatedAt: assets[0]?.created_at || new Date().toISOString(),
-      items: assets.map(asset => ({
-        id: asset.id,
-        title: asset.name,
-        description: asset.content?.description || '',
-        type: asset.subtype || 'section',
-        status: asset.status,
-        lastUpdated: asset.updated_at,
-        updatedBy: asset.updated_by,
-        documentCount: asset.content?.document_count || 0
-      }))
-    }))
+    console.log('Final plans array:', plans.map(p => ({ type: p.type, title: p.title, items: p.items.length })))
+    return plans
+  }
+
+  const viewPlan = (plan: ManagementPlan) => {
+    setViewingPlan(plan)
+    setSelectedPlanType(plan.type)
   }
 
   const generatePlan = async (planType: string) => {
     try {
-      const response = await fetch('/api/v1/projects/[projectId]/ai/plan-generation', {
+      const response = await fetch(`/api/v1/projects/${projectId}/ai/plan-generation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -214,6 +238,8 @@ export default function ProjectPlansPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {Object.entries(planTypes).map(([type, config]) => {
           const plan = plans.find(p => p.type === type)
+          console.log(`Rendering ${type} plan card:`, plan ? `Found with ${plan.items.length} items` : 'NOT FOUND')
+          console.log(`Available plans:`, plans.map(p => p.type))
           const IconComponent = config.icon
 
           return (
@@ -238,7 +264,12 @@ export default function ProjectPlansPage() {
                 <div className="mt-4 space-y-2">
                   {plan ? (
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => viewPlan(plan)}
+                      >
                         <Eye className="mr-2 h-3 w-3" />
                         View
                       </Button>
@@ -270,7 +301,84 @@ export default function ProjectPlansPage() {
       </div>
 
       {/* Detailed Plan View */}
-      {plans.length > 0 && (
+      {viewingPlan && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>{viewingPlan.title}</CardTitle>
+                <CardDescription>
+                  Detailed view of plan sections and requirements
+                </CardDescription>
+              </div>
+              <Button variant="outline" onClick={() => setViewingPlan(null)}>
+                Back to Overview
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {/* Plan Overview */}
+              <div className="bg-muted p-4 rounded-lg">
+                <h3 className="font-semibold mb-2">Plan Overview</h3>
+                <p className="text-sm text-muted-foreground mb-4">{viewingPlan.description}</p>
+                <div className="flex gap-4 text-sm">
+                  <div><strong>Status:</strong> {getStatusBadge(viewingPlan.status)}</div>
+                  <div><strong>Generated:</strong> {new Date(viewingPlan.generatedAt).toLocaleDateString()}</div>
+                  <div><strong>Sections:</strong> {viewingPlan.items.length}</div>
+                </div>
+              </div>
+
+              {/* Plan Sections */}
+              <div>
+                <h3 className="font-semibold mb-4">Plan Sections</h3>
+                <div className="space-y-4">
+                  {viewingPlan.items.map((item, index) => (
+                    <Card key={item.id || index}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base">
+                            {item.item_no ? `${item.item_no} - ` : ''}{item.title}
+                          </CardTitle>
+                          {item.content_type && (
+                            <Badge variant="outline" className="text-xs">
+                              {item.content_type}
+                            </Badge>
+                          )}
+                        </div>
+                        {item.label && (
+                          <CardDescription className="text-xs text-blue-600">
+                            {item.label}
+                          </CardDescription>
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        {item.content && (
+                          <div className="text-sm text-muted-foreground mb-3">
+                            {typeof item.content === 'string' ?
+                              item.content.length > 300 ?
+                                `${item.content.substring(0, 300)}...` :
+                                item.content
+                              : JSON.stringify(item.content, null, 2)
+                            }
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                          <div>ID: {item.id}</div>
+                          {item.parentId && <div>Parent: {item.parentId}</div>}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Plan Navigation Tabs (when not viewing a specific plan) */}
+      {!viewingPlan && plans.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Plan Details</CardTitle>
@@ -290,34 +398,14 @@ export default function ProjectPlansPage() {
 
               {plans.map(plan => (
                 <TabsContent key={plan.type} value={plan.type} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {plan.items.map(item => (
-                      <Card key={item.id}>
-                        <CardHeader className="pb-3">
-                          <div className="flex items-center justify-between">
-                            <CardTitle className="text-base">{item.title}</CardTitle>
-                            {getStatusBadge(item.status)}
-                          </div>
-                          <CardDescription className="text-sm">
-                            {item.description}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex items-center justify-between text-sm text-muted-foreground">
-                            <div className="flex items-center">
-                              <Calendar className="mr-1 h-3 w-3" />
-                              {new Date(item.lastUpdated).toLocaleDateString()}
-                            </div>
-                            {item.updatedBy && (
-                              <div className="flex items-center">
-                                <User className="mr-1 h-3 w-3" />
-                                {item.updatedBy}
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground mb-4">
+                      Click "View" on the plan above to see detailed sections and requirements.
+                    </p>
+                    <Button onClick={() => viewPlan(plan)}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      View {planTypes[plan.type]?.title}
+                    </Button>
                   </div>
                 </TabsContent>
               ))}
@@ -352,3 +440,4 @@ export default function ProjectPlansPage() {
     </div>
   )
 }
+

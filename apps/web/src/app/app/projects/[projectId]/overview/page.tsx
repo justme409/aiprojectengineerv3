@@ -34,52 +34,52 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 
 	const assets = await getAssets({ project_id: projectId, limit: 10 })
 
+	// Get project asset for dynamic fields
+	const projectAsset = assets.find(asset => asset.type === 'project')
+	const jurisdiction = projectAsset?.content?.jurisdiction || 'unknown'
+
+	// Jurisdiction-based feature flags
+	const showPrimaryTesting = jurisdiction === 'NSW'
+	const showJurisdictionSpecificContent = jurisdiction !== 'unknown'
+
+	// Jurisdiction display logic
+	const getJurisdictionDisplayName = (jurisdiction: string) => {
+		switch (jurisdiction.toLowerCase()) {
+			case 'nsw': return 'New South Wales'
+			case 'qld': return 'Queensland'
+			case 'vic': return 'Victoria'
+			case 'sa': return 'South Australia'
+			case 'wa': return 'Western Australia'
+			case 'tas': return 'Tasmania'
+			case 'nt': return 'Northern Territory'
+			case 'act': return 'Australian Capital Territory'
+			default: return jurisdiction.toUpperCase()
+		}
+	}
+
 	return (
 		<div className="space-y-8">
 			{/* Project Header */}
 			<div className="bg-white rounded-lg shadow-sm border p-6">
-				<h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
-				<p className="text-gray-600 mt-2">{project.description}</p>
-				<div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500">
-					<div><strong>Client:</strong> {project.clientName}</div>
-					<div><strong>Location:</strong> {project.location}</div>
-					<div><strong>Status:</strong> {project.status}</div>
+				<div className="flex justify-between items-start">
+					<div>
+						<h1 className="text-3xl font-bold text-gray-900">{projectAsset?.name || project.name}</h1>
+						<p className="text-gray-600 mt-2">{projectAsset?.content?.description || project.description}</p>
+					</div>
+					<div className="text-sm text-gray-500">
+						<strong>Jurisdiction:</strong> {getJurisdictionDisplayName(jurisdiction)}
+					</div>
 				</div>
-			</div>
-
-			{/* Quick Stats */}
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Total Assets</CardTitle>
-						<FileText className="h-4 w-4 text-muted-foreground" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold">{assets.length}</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Documents</CardTitle>
-						<FileText className="h-4 w-4 text-green-600" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold text-green-600">
-							{assets.filter(a => a.type === 'document').length}
-						</div>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-						<CardTitle className="text-sm font-medium">Active Lots</CardTitle>
-						<CheckSquare className="h-4 w-4 text-orange-600" />
-					</CardHeader>
-					<CardContent>
-						<div className="text-2xl font-bold text-orange-600">
-							{assets.filter(a => a.type === 'lot' && a.status === 'active').length}
-						</div>
-					</CardContent>
-				</Card>
+				<div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-500">
+					<div><strong>Client:</strong> {projectAsset?.content?.client || projectAsset?.content?.client_name || project.clientName}</div>
+					<div><strong>Location:</strong> {projectAsset?.content?.project_address || projectAsset?.content?.location || project.location}</div>
+					<div><strong>State/Territory:</strong> {projectAsset?.content?.state_territory}</div>
+					<div><strong>Local Council:</strong> {projectAsset?.content?.local_council}</div>
+					<div><strong>Regulatory Framework:</strong> {projectAsset?.content?.regulatory_framework}</div>
+					{projectAsset?.content?.html && (
+						<div><Link href={`/app/projects/${projectId}/details`} className="text-blue-600 hover:underline">View Details</Link></div>
+					)}
+				</div>
 			</div>
 
 			{/* Main Navigation Sections */}
@@ -95,13 +95,6 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 						<CardDescription>Main project management areas</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-3">
-						<Link href={`/app/projects/${projectId}/overview`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<Home className="mr-2 h-4 w-4" />
-								Overview
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
 						<Link href={`/app/projects/${projectId}/documents`}>
 							<Button variant="ghost" className="w-full justify-start">
 								<FileText className="mr-2 h-4 w-4" />
@@ -199,20 +192,15 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
-						<Link href={`/app/projects/${projectId}/quality/primary-testing`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<TestTube className="mr-2 h-4 w-4" />
-								Primary Testing
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/app/projects/${projectId}/quality/itp-register`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<FileCheck className="mr-2 h-4 w-4" />
-								ITP Register
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
+						{showPrimaryTesting && (
+							<Link href={`/app/projects/${projectId}/quality/primary-testing`}>
+								<Button variant="ghost" className="w-full justify-start">
+									<TestTube className="mr-2 h-4 w-4" />
+									Primary Testing (NSW)
+									<ChevronRight className="ml-auto h-4 w-4" />
+								</Button>
+							</Link>
+						)}
 					</CardContent>
 				</Card>
 

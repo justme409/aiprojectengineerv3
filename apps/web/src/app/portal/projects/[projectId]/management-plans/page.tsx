@@ -74,7 +74,7 @@ export default function ManagementPlansPage() {
     try {
       setLoading(true)
       // Fetch management plans from assets
-      const response = await fetch(`/api/v1/assets?project_id=${projectId}&type=plan`)
+      const response = await fetch(`/api/v1/assets?projectId=${projectId}&type=plan`)
       if (response.ok) {
         const data = await response.json()
         // Transform assets into management plans format
@@ -89,29 +89,46 @@ export default function ManagementPlansPage() {
   }
 
   const transformAssetsToPlans = (assets: any[]): ManagementPlan[] => {
-    // Group assets by plan type and create management plan objects
-    const planGroups: { [key: string]: any[] } = {}
+    const plans: ManagementPlan[] = []
 
     assets.forEach(asset => {
-      const planType = asset.content?.plan_type || 'pqp'
-      if (!planGroups[planType]) {
-        planGroups[planType] = []
+      // Handle management_plans asset (contains multiple plan types)
+      if (asset.subtype === 'management_plans' && asset.content?.plans) {
+        const planTypesFromContent = asset.content.plans
+        Object.entries(planTypesFromContent).forEach(([planType, planData]: [string, any]) => {
+          plans.push({
+            id: `${planType}-${projectId}`,
+            type: planType as 'pqp' | 'emp' | 'ohsmp' | 'tmp',
+            title: planTypes[planType as keyof typeof planTypes]?.title || `${planType.toUpperCase()} Plan`,
+            description: planTypes[planType as keyof typeof planTypes]?.description || planData.description || '',
+            status: asset.status || 'draft',
+            generatedAt: asset.created_at,
+            documentUrl: planData.document_url,
+            approvalRequired: planData.approval_required || false,
+            approvedBy: planData.approved_by,
+            approvedAt: planData.approved_at
+          })
+        })
       }
-      planGroups[planType].push(asset)
+      // Handle individual plan assets
+      else if (asset.type === 'plan' && asset.subtype !== 'management_plans') {
+        const planType = asset.subtype === 'wbs' ? 'pqp' : asset.subtype || 'pqp'
+        plans.push({
+          id: asset.id,
+          type: planType as 'pqp' | 'emp' | 'ohsmp' | 'tmp',
+          title: asset.name,
+          description: asset.content?.description || planTypes[planType as keyof typeof planTypes]?.description || '',
+          status: asset.status || 'draft',
+          generatedAt: asset.created_at,
+          documentUrl: asset.content?.document_url,
+          approvalRequired: asset.content?.approval_required || false,
+          approvedBy: asset.content?.approved_by,
+          approvedAt: asset.content?.approved_at
+        })
+      }
     })
 
-    return Object.entries(planGroups).map(([type, assets]) => ({
-      id: `${type}-${projectId}`,
-      type: type as 'pqp' | 'emp' | 'ohsmp' | 'tmp',
-      title: planTypes[type as keyof typeof planTypes]?.title || 'Management Plan',
-      description: planTypes[type as keyof typeof planTypes]?.description || '',
-      status: assets[0]?.status || 'draft',
-      generatedAt: assets[0]?.created_at || new Date().toISOString(),
-      documentUrl: assets[0]?.content?.document_url,
-      approvalRequired: assets[0]?.content?.approval_required || false,
-      approvedBy: assets[0]?.content?.approved_by,
-      approvedAt: assets[0]?.content?.approved_at
-    }))
+    return plans
   }
 
   const getStatusBadge = (status: string) => {
