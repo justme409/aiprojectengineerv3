@@ -400,7 +400,7 @@ export default function ProjectPlansPage() {
                 <TabsContent key={plan.type} value={plan.type} className="space-y-4">
                   <div className="text-center py-8">
                     <p className="text-muted-foreground mb-4">
-                      Click "View" on the plan above to see detailed sections and requirements.
+                      Click &quot;View&quot; on the plan above to see detailed sections and requirements.
                     </p>
                     <Button onClick={() => viewPlan(plan)}>
                       <Eye className="mr-2 h-4 w-4" />

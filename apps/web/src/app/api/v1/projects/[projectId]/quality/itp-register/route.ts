@@ -85,19 +85,19 @@ export async function GET(
     const result = await pool.query(query, queryParams)
 
     // Calculate summary statistics
+    const totalItems = result.rows.reduce((sum, row) => sum + (row.item_count || 0), 0)
+    const completedItems = result.rows.reduce((sum, row) => sum + (row.completed_items || 0), 0)
+
     const stats = {
       total: result.rows.length,
       approved: result.rows.filter(row => row.approval_state === 'approved').length,
       pending: result.rows.filter(row => row.approval_state === 'pending_review').length,
       draft: result.rows.filter(row => row.status === 'draft').length,
       rejected: result.rows.filter(row => row.approval_state === 'rejected').length,
-      totalItems: result.rows.reduce((sum, row) => sum + (row.item_count || 0), 0),
-      completedItems: result.rows.reduce((sum, row) => sum + (row.completed_items || 0), 0)
+      totalItems,
+      completedItems,
+      completionRate: totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
     }
-
-    stats.completionRate = stats.totalItems > 0
-      ? Math.round((stats.completedItems / stats.totalItems) * 100)
-      : 0
 
     return NextResponse.json({
       itpRegister: result.rows,

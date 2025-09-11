@@ -21,3 +21,25 @@ export interface IdempotentAssetWriteSpec {
 	idempotency_key: string
 	audit_context?: Record<string, any>
 }
+
+export type WbsNodeType = 'discipline' | 'work_package' | 'activity'
+
+export interface WbsItem {
+	id: string
+	name: string
+	parentId?: string
+	node_type: WbsNodeType
+	path_key?: string
+	content?: {
+		inferred_scope?: string
+		deliverables?: string[]
+		resources?: string[]
+		risks?: string[]
+		acceptance_criteria?: string[]
+		related_requirements?: string[]
+		itp_required?: boolean
+		itp_reasoning?: string
+		reasoning?: string
+		description?: string
+	}
+}

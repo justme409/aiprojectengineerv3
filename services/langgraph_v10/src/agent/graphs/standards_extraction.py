@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 import os
 import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
-from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
+from agent.tools.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -100,7 +100,7 @@ def fetch_reference_database_node(state: StandardsExtractionState) -> StandardsE
     """Fetch reference database for standards matching"""
     try:
         # Import the tool function
-        from agents_v9.tools.db_tools import fetch_reference_documents
+        from agent.tools.db_tools import fetch_reference_documents
         ref_db = fetch_reference_documents.invoke({})
         return {**state, "reference_database": ref_db}
     except Exception as e:
@@ -186,6 +186,21 @@ def create_standards_asset_specs(state: StandardsExtractionState) -> List[Dict[s
     specs = []
 
     for std in state["standards_from_project_documents"]:
+        # Create edges for this standard
+        edges = []
+        for doc_id in std.get('document_ids', []):
+            edges.append({
+                "from_asset_id": "",  # Will be set to standard asset ID
+                "to_asset_id": doc_id,
+                "edge_type": "REFERENCES",
+                "properties": {
+                    "reference_type": "standards_citation",
+                    "section_reference": std.get("section_reference"),
+                    "context": std.get("context", "")[:100]
+                },
+                "idempotency_key": f"std_doc_ref:{state['project_id']}:{std['standard_code']}:{doc_id}"
+            })
+
         spec = {
             "asset": {
                 "type": "standard",
@@ -205,7 +220,8 @@ def create_standards_asset_specs(state: StandardsExtractionState) -> List[Dict[s
                     }
                 }
             },
-            "idempotency_key": f"standard:{state['project_id']}:{std['standard_code']}"
+            "idempotency_key": f"standard:{state['project_id']}:{std['standard_code']}",
+            "edges": edges
         }
         specs.append(spec)
 

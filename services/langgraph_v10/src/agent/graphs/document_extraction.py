@@ -4,8 +4,8 @@ import asyncio
 import logging
 from uuid import UUID
 from agent.tools.azure_tools import generate_sas_token, extract_document_content_async
-from agent.graphs.db_fetcher import db_fetcher_step
-from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
+from agent.tools.db_fetcher import db_fetcher_step
+from agent.tools.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 from langgraph.types import interrupt
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ async def fetch_document_details(state: ExtractionState) -> Dict[str, Any]:
         return {"document_details": []}
 
     # Fetch document metadata from database
-    from agent.graphs.db_fetcher import DbFetcherState
+    from agent.tools.db_fetcher import DbFetcherState
     # v10 uses document ASSETS; read from public.assets and project required fields from JSONB content
     fetch_state = DbFetcherState(queries=[{
         "table": "assets",

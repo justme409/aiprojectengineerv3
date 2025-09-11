@@ -4,7 +4,7 @@ from langgraph.graph import StateGraph, START, END
 from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 import logging
-from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
+from agent.tools.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 
 logger = logging.getLogger(__name__)
 

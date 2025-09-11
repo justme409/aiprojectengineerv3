@@ -61,28 +61,43 @@ export async function POST(
       documentAssets.push({ id: result.id, fileName })
     }
 
-    // Trigger LangGraph V10 processing - NO MOCK DATA
+    // Trigger document addition agent with metadata extraction - NO MOCK DATA
     try {
-      const langGraphResult = await triggerProjectProcessingViaLangGraphEnhanced(
+      // Prepare document files for the addition agent
+      const documentFiles = files.map(file => ({
+        file_name: file.fileName ?? file.filename,
+        content_type: file.contentType ?? file.type ?? 'application/octet-stream',
+        size: file.size,
+        blob_url: azureStorage.isConfigured()
+          ? azureStorage.getPublicUrl(file.blobName ?? file.storage_path ?? `projects/${projectId}/${file.fileName ?? file.filename}`)
+          : `https://${process.env.AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${process.env.AZURE_STORAGE_CONTAINER || 'documents'}/${file.blobName ?? file.storage_path ?? `projects/${projectId}/${file.fileName ?? file.filename}`}`,
+        storage_path: file.blobName ?? file.storage_path ?? `projects/${projectId}/${file.fileName ?? file.filename}`
+      }))
+
+      // Import and trigger the document addition agent
+      const { triggerDocumentAdditionAgent } = await import('@/lib/actions/document-addition-actions')
+
+      const additionResult = await triggerDocumentAdditionAgent(
         projectId,
-        documentAssets.map(doc => doc.id)
+        documentFiles
       )
 
       return NextResponse.json({
-        message: 'LangGraph V10 processing initiated successfully',
+        message: 'Document addition and processing initiated successfully',
         documents: documentAssets,
-        langgraph: {
-          thread_id: langGraphResult.thread_id,
-          run_id: langGraphResult.run_id,
-          run_uid: langGraphResult.run_uid
+        processing: {
+          thread_id: additionResult.thread_id,
+          run_id: additionResult.run_id,
+          processed_count: additionResult.processed_count,
+          failed_count: additionResult.failed_count
         }
       })
-    } catch (langGraphError) {
-      console.error('LangGraph V10 processing failed:', langGraphError)
+    } catch (additionError) {
+      console.error('Document addition processing failed:', additionError)
       return NextResponse.json({
-        message: 'Documents uploaded but LangGraph processing failed',
+        message: 'Documents uploaded but processing failed',
         documents: documentAssets,
-        error: (langGraphError as any)?.message || 'Unknown error'
+        error: (additionError as any)?.message || 'Unknown error'
       }, { status: 207 }) // Multi-status response
     }
   } catch (error) {

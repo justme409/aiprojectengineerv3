@@ -21,6 +21,11 @@ export async function getAssets(filter: { project_id?: string, type?: string, li
 	return rows
 }
 
+export async function getAssetById(id: string) {
+	const { rows } = await query('SELECT * FROM public.assets WHERE id=$1 AND NOT is_deleted', [id])
+	return rows[0] || null
+}
+
 export async function deleteAsset(id: string) {
 	await query('UPDATE public.assets SET is_deleted=true WHERE id=$1', [id])
 	return { id }

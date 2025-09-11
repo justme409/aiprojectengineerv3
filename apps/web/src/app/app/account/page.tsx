@@ -53,7 +53,8 @@ export default function AccountPage() {
     email: "",
     phone: "",
     location: "",
-    company: ""
+    company: "",
+    role: ""
   })
 
   useEffect(() => {
@@ -74,7 +75,8 @@ export default function AccountPage() {
               email: profileData.profile.email || "",
               phone: profileData.profile.content?.phone || "",
               location: profileData.profile.content?.location || "",
-              company: profileData.profile.content?.company || ""
+              company: profileData.profile.content?.company || "",
+              role: profileData.profile.role || ""
             })
           }
         }

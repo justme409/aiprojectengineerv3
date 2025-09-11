@@ -114,7 +114,7 @@ export async function POST(
         edges: [{
           from_asset_id: parent_asset_id,
           to_asset_id: result.id,
-          edge_type: 'PARENT_OF',
+          edge_type: 'PARENT_OF' as const,
           properties: {}
         }],
         idempotency_key: `edge:${parent_asset_id}:${result.id}`,

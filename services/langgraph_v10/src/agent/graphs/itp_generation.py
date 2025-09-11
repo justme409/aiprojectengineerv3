@@ -4,6 +4,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.types import interrupt
 import os
 import logging
+from agent.prompts.itp_generation_prompt import ITP_GENERATION_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -115,49 +116,10 @@ def generate_itps(state: ItpGenerationState) -> ItpGenerationState:
                 "project_context": f"Project ID: {state.project_id}"
             }
 
-            prompt = f"""You are an expert civil engineering consultant tasked with generating a detailed, industry-standard Inspection and Test Plan (ITP) based on specific project data.
-
-UNDERSTANDING INSPECTION & TEST PLANS (ITPs) IN AUSTRALIAN CIVIL CONSTRUCTION:
-An ITP is a formal quality-assurance document that details all inspections and tests required to demonstrate that work meets contractual and regulatory requirements.
-
-**When Are ITPs Required?**
-ITPs are required whenever the project or applicable standards call for documented verification of quality. Key triggers include:
-- Standards and Quality Systems (ISO 9001, AS/NZS ISO 9001)
-- Contract specifications and quality clauses
-- Major or safety-critical construction operations
-- Hold and Witness points specified in contracts
-
-**Structure and Content of an ITP:**
-A well-structured ITP includes:
-- Scope of Work and Task Breakdown
-- Inspection/Test Methods and Criteria
-- Acceptance Criteria and Records
-- Responsibilities and Sign-offs
-- Hold, Witness, and Review Points
-
-TARGET WORK PACKAGE:
-{node_title}
-
-CONTEXT:
-{context_payload}
-
-Generate a comprehensive ITP with the following structure:
-1. **Section Headers** (type='section') with hierarchical numbers (1.0, 2.0, etc.)
-2. **Inspection/Test Items** (type='inspection') under each section with detailed specifications
-
-For each item, provide:
-- Simple IDs (section_1, item_1_1, etc.)
-- Hierarchical numbering
-- Detailed inspection/test points
-- Specific acceptance criteria
-- Referenced specification clauses
-- Inspection/test methods
-- Frequency of inspections
-- Responsibility assignments
-- Hold/Witness point classifications
-
-Output the complete ITP structure as a structured JSON with an "items" array.
-"""
+            prompt = ITP_GENERATION_PROMPT.format(
+                node_title=node_title,
+                context_payload=context_payload
+            )
 
             structured_llm = llm.with_structured_output(ItpResponse, method="json_mode")
             response: ItpResponse = structured_llm.invoke(prompt)

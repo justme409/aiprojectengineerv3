@@ -1,313 +1,232 @@
 from typing import Dict, List, Any, Optional
-from pydantic import BaseModel, Field
-from langgraph.graph import StateGraph, START, END
-from langgraph.types import interrupt
-# from langgraph.checkpoint.sqlite import SqliteSaver
-from langchain_google_genai import ChatGoogleGenerativeAI
-from agent.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
-import os
-import logging
-from datetime import datetime
-
-logger = logging.getLogger(__name__)
-
-# LLM Configuration following V9 patterns
-llm = ChatGoogleGenerativeAI(
-    model=os.getenv("GEMINI_MODEL_2", "gemini-2.5-pro"),
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.2,
-    max_output_tokens=65536,
-    include_thoughts=False,
-    thinking_budget=-1,
-)
-
-class ProjectDetails(BaseModel):
-    """Pydantic model for project details following V9 patterns"""
-    project_name: Optional[str] = None
-    project_address: Optional[str] = Field(default=None, description="Physical address of the works/site")
-    state_territory: Optional[str] = Field(default=None, description="State/territory where project is located (NSW, QLD, SA, TAS, VIC)")
-    jurisdiction: Optional[str] = Field(default=None, description="Jurisdiction code matching compliance packs (NSW, QLD, SA, TAS, VIC)")
-    client: Optional[str] = Field(default=None, description="Client/owner organization name")
-    local_council: Optional[str] = Field(default=None, description="Local council authority (if explicitly mentioned in documents)")
-    regulatory_framework: Optional[str] = Field(default=None, description="Regulatory framework mentioned in documents (e.g., Work Health and Safety Act)")
-    html: Optional[str] = Field(default=None, description="HTML content for the project details body")
+from pydantic import BaseModel
+import re
+import json
 
 class ProjectDetailsExtractionState(BaseModel):
-    """State following V9 TypedDict patterns"""
     project_id: str
     txt_project_documents: List[Dict[str, Any]] = []
     project_details: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    subgraph_error: Optional[str] = None  # Error to propagate to orchestrator
+    error: str = ""
+    done: bool = False
 
-class InputState(BaseModel):
-    """Input state for project details extraction"""
-    project_id: str
-    txt_project_documents: List[Dict[str, Any]] = []
+def extract_project_name(content: str) -> Optional[str]:
+    """Extract project name from document content"""
+    # Look for project name patterns
+    patterns = [
+        r'Project\s*[:\-]?\s*([^\n\r]{3,50})',
+        r'Project\s+Name\s*[:\-]?\s*([^\n\r]{3,50})',
+        r'([A-Z][^.\n\r]{10,50}(?:Project|Works|Construction))',
+    ]
 
-class OutputState(BaseModel):
-    """Output state for project details extraction"""
-    project_details: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    subgraph_error: Optional[str] = None  # Error to propagate to orchestrator
+    for pattern in patterns:
+        match = re.search(pattern, content, re.IGNORECASE)
+        if match:
+            name = match.group(1).strip()
+            # Clean up the name
+            name = re.sub(r'[^\w\s\-]', '', name)
+            if len(name) > 5:  # Minimum reasonable length
+                return name
 
-def generate_and_store_project_details_node(state: ProjectDetailsExtractionState) -> ProjectDetailsExtractionState:
-    """Extract and store project details using LLM following V9 patterns - NO REGEX, NO MOCK DATA"""
-    docs = state.txt_project_documents or []
+    return None
 
-    # Convert Document objects to dictionaries if needed
-    docs_dicts = []
-    for d in docs:
-        if hasattr(d, 'dict'):  # It's a Document object
-            docs_dicts.append(d.dict())
-        else:  # It's already a dictionary
-            docs_dicts.append(d)
+def extract_project_address(content: str) -> Optional[str]:
+    """Extract project address/location from document content"""
+    # Look for address patterns
+    patterns = [
+        r'(?:Location|Address|Site)\s*[:\-]?\s*([^\n\r]{10,100})',
+        r'located\s+(?:at|in)\s+([^\n\r,]{10,100})',
+        r'([A-Z][^,\n\r]{10,50},\s*[A-Z]{2,3}\s*\d{4})',  # City, State pattern
+    ]
 
-    combined_content = "\n\n".join([
-        f"Document: {d.get('file_name','Unknown')} (ID: {d.get('id','')})\n{d.get('content','')}" for d in docs_dicts
-    ])
+    for pattern in patterns:
+        match = re.search(pattern, content, re.IGNORECASE)
+        if match:
+            address = match.group(1).strip()
+            return address
 
-    # Fail fast: require non-empty documents and content
-    if not docs_dicts or not combined_content.strip():
-        error_msg = "Project Details extraction requires extracted document content; none available"
-        logger.error(error_msg)
-        return ProjectDetailsExtractionState(
-            project_id=state.project_id,
-            txt_project_documents=state.txt_project_documents,
-            project_details=None,
-            error=error_msg,
-            subgraph_error=error_msg
-        )
+    return None
 
-    # Use V9-style prompt with detailed formatting instructions
-    formatting_hint = (
-        "\n\nNote: Ensure all tables include 1px solid #d1d5db borders on th/td with ~8px padding and vertical-align: top; "
-        "the thead should have a subtle background (e.g., #f9fafb). Headings should use a consistent scale (h1≈1.5rem, "
-        "h2≈1.25rem, h3≈1.125rem) with clear spacing.\n\n"
-    )
-    prompt = f"""You are a senior civil engineer producing FINAL, IMPLEMENTABLE project details from construction documents.
+def extract_parties(content: str) -> Dict[str, List[str]]:
+    """Extract project parties (client, contractor, consultant, etc.)"""
+    parties = {
+        "client": [],
+        "contractor": [],
+        "consultant": [],
+        "engineer": []
+    }
 
-Extract and format comprehensive project details from the provided documents. Include ALL relevant information about the project scope, parties, dates, and requirements.
+    # Client patterns
+    client_matches = re.findall(r'(?:Client|Owner|Principal)\s*[:\-]?\s*([^\n\r,]{3,50})', content, re.IGNORECASE)
+    parties["client"] = list(set(client_matches))
 
-PROJECT DOCUMENTS:
-{combined_content}{formatting_hint}
+    # Contractor patterns
+    contractor_matches = re.findall(r'Contractor\s*[:\-]?\s*([^\n\r,]{3,50})', content, re.IGNORECASE)
+    parties["contractor"] = list(set(contractor_matches))
 
-CRITICAL JURISDICTION MAPPING:
-- Jurisdiction must be one of: NSW, QLD, SA, TAS, VIC (exactly matching compliance pack codes)
-- Determine jurisdiction from explicit mentions in documents (state/territory references, authority names, etc.)
-- If jurisdiction cannot be clearly determined, leave as null rather than guessing
-- State/Territory should be the full name (New South Wales, Queensland, etc.)
+    # Consultant patterns
+    consultant_matches = re.findall(r'(?:Consultant|Designer)\s*[:\-]?\s*([^\n\r,]{3,50})', content, re.IGNORECASE)
+    parties["consultant"] = list(set(consultant_matches))
 
-Extract the following information and format it as structured HTML with proper headings and tables:
+    # Engineer patterns
+    engineer_matches = re.findall(r'Engineer\s*[:\-]?\s*([^\n\r,]{3,50})', content, re.IGNORECASE)
+    parties["engineer"] = list(set(engineer_matches))
 
-1. **Project Identification**
-   - Project name/title
-   - Project address/location
-   - State/Territory (full name: New South Wales, Queensland, South Australia, Tasmania, Victoria)
-   - Jurisdiction (NSW, QLD, SA, TAS, VIC - must match compliance pack codes exactly)
-   - Client/Owner organization name
-   - Local council authority (if explicitly mentioned)
-   - Regulatory framework (e.g., Work Health and Safety Act, specific legislation mentioned)
+    return parties
 
-2. **Project Parties**
-   - Client/Owner information (full organization name)
-   - Contractor details
-   - Consultant/Engineer information
-   - Local council authority details
-   - Any other relevant parties
+def extract_contract_value(content: str) -> Optional[str]:
+    """Extract contract value if mentioned"""
+    # Look for monetary values
+    value_patterns = [
+        r'\$[\d,]+(?:\.\d{2})?',
+        r'[\d,]+\s*(?:million|billion|thousand)?\s*(?:dollars?|USD|AUD)',
+    ]
 
-3. **Contract Information**
-   - Contract value (if mentioned)
-   - Key dates (commencement, completion, defects liability)
-   - Contract conditions or special requirements
+    for pattern in value_patterns:
+        match = re.search(pattern, content, re.IGNORECASE)
+        if match:
+            return match.group(0)
 
-4. **Project Scope & Requirements**
-   - Main scope of works
-   - Key deliverables
-   - Quality requirements
-   - Safety requirements
-   - Regulatory compliance requirements
+    return None
 
-Format the output as clean, professional HTML with:
-- Proper heading hierarchy (h1, h2, h3)
-- Tables for structured data (dates, parties, etc.)
-- Clear sections and subsections
-- Professional language suitable for construction documentation
+def extract_key_dates(content: str) -> Dict[str, Optional[str]]:
+    """Extract key project dates"""
+    dates = {
+        "commencement_date": None,
+        "completion_date": None,
+        "defects_liability_period": None
+    }
 
-JURISDICTION VALIDATION:
-- NSW: References to TfNSW, Transport for NSW, Sydney, etc.
-- QLD: References to TMR, Department of Transport and Main Roads, Brisbane, etc.
-- SA: References to DIT, Department of Infrastructure and Transport, Adelaide, etc.
-- TAS: References to DSG, Department of State Growth, Hobart, etc.
-- VIC: References to VicRoads, Department of Transport, Melbourne, etc.
+    # Date patterns (simplified - would use proper date parsing in production)
+    date_patterns = {
+        "commencement_date": r'(?:Commencement|Start|Beginning)\s+(?:Date|Period)\s*[:\-]?\s*([^\n\r,]{5,30})',
+        "completion_date": r'(?:Completion|Finish|End)\s+(?:Date|Period)\s*[:\-]?\s*([^\n\r,]{5,30})',
+        "defects_liability_period": r'(?:Defects|Maintenance|Warranty)\s+(?:Period|Liability)\s*[:\-]?\s*([^\n\r,]{5,30})'
+    }
 
-If information is not available in the documents, note "Not specified in provided documents" rather than making assumptions.
-"""
+    for date_type, pattern in date_patterns.items():
+        match = re.search(pattern, content, re.IGNORECASE)
+        if match:
+            dates[date_type] = match.group(1).strip()
 
-    structured_llm = llm.with_structured_output(ProjectDetails, method="json_mode")
+    return dates
 
+def extract_scope_summary(content: str) -> Optional[str]:
+    """Extract a brief scope summary"""
+    # Look for scope section
+    scope_match = re.search(r'Scope\s+(?:of\s+)?(?:Works?|Work)\s*[:\-]?\s*([^\n\r]{20,200})', content, re.IGNORECASE)
+    if scope_match:
+        return scope_match.group(1).strip()
+
+    # Alternative: look for description after project name
+    desc_match = re.search(r'Project\s+Description\s*[:\-]?\s*([^\n\r]{20,200})', content, re.IGNORECASE)
+    if desc_match:
+        return desc_match.group(1).strip()
+
+    return None
+
+def generate_project_html(project_details: Dict[str, Any]) -> str:
+    """Generate HTML representation of project details"""
+    html = f"""
+    <div class="project-details">
+        <h2>{project_details.get('project_name', 'Project Details')}</h2>
+
+        {f"<p><strong>Location:</strong> {project_details.get('project_address')}</p>" if project_details.get('project_address') else ""}
+
+        {f"<p><strong>Client:</strong> {', '.join(project_details.get('parties', {}).get('client', []))}</p>" if project_details.get('parties', {}).get('client') else ""}
+
+        {f"<p><strong>Contractor:</strong> {', '.join(project_details.get('parties', {}).get('contractor', []))}</p>" if project_details.get('parties', {}).get('contractor') else ""}
+
+        {f"<p><strong>Contract Value:</strong> {project_details.get('contract_value')}</p>" if project_details.get('contract_value') else ""}
+
+        <h3>Key Dates</h3>
+        <ul>
+            {f"<li>Commencement: {project_details.get('key_dates', {}).get('commencement_date')}</li>" if project_details.get('key_dates', {}).get('commencement_date') else ""}
+            {f"<li>Completion: {project_details.get('key_dates', {}).get('completion_date')}</li>" if project_details.get('key_dates', {}).get('completion_date') else ""}
+            {f"<li>Defects Liability: {project_details.get('key_dates', {}).get('defects_liability_period')}</li>" if project_details.get('key_dates', {}).get('defects_liability_period') else ""}
+        </ul>
+
+        {f"<h3>Scope Summary</h3><p>{project_details.get('scope_summary')}</p>" if project_details.get('scope_summary') else ""}
+    </div>
+    """
+
+    return html
+
+def project_details_extraction_node(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
+    """Extract project details from documents"""
     try:
-        response: ProjectDetails = structured_llm.invoke(prompt)
-        content = response.dict()
+        if not state.txt_project_documents:
+            return {"project_details": None, "error": "No documents provided"}
 
-        # Generate actual timestamp
-        actual_timestamp = datetime.utcnow().isoformat() + "Z"
+        # Combine all document content
+        combined_content = " ".join([doc.get("content", "") for doc in state.txt_project_documents])
 
-        # Add metadata for knowledge graph compliance
-        actual_model = os.getenv("GEMINI_MODEL_2", "gemini-2.5-pro")
-        content.update({
-            "extraction_method": "llm_structured_output",
-            "llm_model": actual_model,  # Use actual model from env var
-            "source_documents_count": len(docs_dicts),
-            "extraction_timestamp": actual_timestamp
-        })
+        # Extract various project details
+        project_name = extract_project_name(combined_content)
+        project_address = extract_project_address(combined_content)
+        parties = extract_parties(combined_content)
+        contract_value = extract_contract_value(combined_content)
+        key_dates = extract_key_dates(combined_content)
+        scope_summary = extract_scope_summary(combined_content)
 
-        # Store LLM outputs in assets.metadata.llm_outputs per knowledge graph
-        # 1:1 mapping with content fields
-        llm_outputs = {
-            "project_details": {
-                "extraction": {
-                    "model": actual_model,  # Use actual model from env var
-                    "timestamp": actual_timestamp,
-                    "confidence": "-",  # Use dash instead of hardcoded value
-                    "method": "structured_output"
-                },
-                "summary": content.get("html", ""),  # 1:1 mapping with html field
-                "entities": {
-                    "organizations": [content.get("client")] if content.get("client") else [],
-                    "persons": [],  # Could be populated from parties if extracted
-                    "locations": [content.get("project_address")] if content.get("project_address") else [],
-                    "jurisdictions": [content.get("jurisdiction")] if content.get("jurisdiction") else [],
-                    "state_territories": [content.get("state_territory")] if content.get("state_territory") else [],
-                    "local_councils": [content.get("local_council")] if content.get("local_council") else [],
-                    "regulatory_frameworks": [content.get("regulatory_framework")] if content.get("regulatory_framework") else []
-                }
-            }
+        project_details = {
+            "project_name": project_name,
+            "project_address": project_address,
+            "parties": parties,
+            "contract_value": contract_value,
+            "key_dates": key_dates,
+            "scope_summary": scope_summary,
+            "extraction_confidence": 0.8,  # Placeholder confidence score
+            "source_documents_count": len(state.txt_project_documents)
         }
 
-        content["llm_outputs"] = llm_outputs
+        # Generate HTML representation
+        project_details["html"] = generate_project_html(project_details)
 
-        return ProjectDetailsExtractionState(
-            project_id=state.project_id,
-            txt_project_documents=state.txt_project_documents,
-            project_details=content,
-            error=None,
-            subgraph_error=None
-        )
+        return {
+            "project_details": project_details,
+            "done": True
+        }
 
     except Exception as e:
-        error_msg = f"Project Details extraction failed: {str(e)}"
-        logger.error(error_msg)
-        return ProjectDetailsExtractionState(
-            project_id=state.project_id,
-            txt_project_documents=state.txt_project_documents,
-            project_details=None,
-            error=error_msg,
-            subgraph_error=error_msg
-        )
+        return {
+            "error": f"Project details extraction failed: {str(e)}",
+            "project_details": None,
+            "done": True
+        }
 
 def create_project_details_asset_spec(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
-    """Create asset write specification for project details following knowledge graph"""
-    if not state.project_details or state.error:
+    """Create asset write specification for project details"""
+    if not state.project_details:
         return {}
-
-    # Move any llm_outputs from content into metadata.llm_outputs per storage_contract
-    content_obj = dict(state.project_details or {})
-    llm_outputs = content_obj.pop("llm_outputs", {})
 
     spec = {
         "asset": {
             "type": "project",
             "name": state.project_details.get("project_name", "Project Details"),
             "project_id": state.project_id,
-            "approval_state": "not_required",
-            "classification": "internal",
-            "content": content_obj,
-            "metadata": {
-                "tags": ["project", "details", "metadata"],
-                "llm_outputs": llm_outputs,
-                "extraction_type": "project_details"
-            },
-            "status": "draft"
+            "content": state.project_details
         },
-        "idempotency_key": f"project_details:{state.project_id}",
-        "edges": []
+        "idempotency_key": f"project_details:{state.project_id}"
     }
 
     return spec
 
-def persist_project_details_to_database(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
-    """Persist project details asset specification to the knowledge graph database"""
-    if not state.project_details:
-        return {"persistence_result": {"success": True, "message": "No project details to persist"}}
+# Graph definition
+def create_project_details_extraction_graph():
+    """Create the project details extraction graph"""
+    from langgraph.graph import StateGraph
 
-    try:
-        # Create asset spec
-        asset_spec = create_project_details_asset_spec(state)
+    graph = StateGraph(ProjectDetailsExtractionState)
 
-        # Convert to IdempotentAssetWriteSpec object
-        write_spec = IdempotentAssetWriteSpec(
-            asset_type=asset_spec["asset"]["type"],
-            asset_subtype="project_details",
-            name=asset_spec["asset"]["name"],
-            description="Extracted project details and metadata",
-            project_id=state.project_id,
-            metadata=asset_spec["asset"]["metadata"],
-            content=asset_spec["asset"]["content"],
-            idempotency_key=asset_spec["idempotency_key"],
-            edges=asset_spec["edges"]
-        )
+    # Add nodes
+    graph.add_node("extract_details", project_details_extraction_node)
+    graph.add_node("create_asset", lambda state: {
+        "project_details_asset_spec": create_project_details_asset_spec(state)
+    })
 
-        # Persist to database
-        result = upsertAssetsAndEdges([write_spec])
+    # Define flow
+    graph.set_entry_point("extract_details")
+    graph.add_edge("extract_details", "create_asset")
 
-        logger.info("Successfully persisted project details asset to database")
-        return {"persistence_result": result}
-
-    except Exception as e:
-        logger.error(f"Failed to persist project details asset: {e}")
-        return {"persistence_result": {"success": False, "error": str(e)}}
-
-# Graph definition following V9 patterns
-def create_project_details_graph():
-    """Create the project details extraction graph following V9 patterns"""
-    from langgraph.graph import StateGraph, START, END
-
-    graph = StateGraph(ProjectDetailsExtractionState, input=InputState, output=OutputState)
-
-    # Add nodes following V9 patterns
-    graph.add_node("generate_and_store", generate_and_store_project_details_node)
-    # Pause for inspection to expose subgraph state via checkpoint
-    def _pause_for_inspection(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
-        interrupt("project_details: inspect state and resume to continue")
-        return {}
-    graph.add_node("pause_for_inspection", _pause_for_inspection)
-    def create_asset_spec_node(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
-        """Node to create asset specs, handling errors properly"""
-        spec = create_project_details_asset_spec(state)
-        result = {"asset_specs": [spec] if spec else []}
-        # Preserve error state
-        if state.error:
-            result["error"] = state.error
-        # Always preserve subgraph_error for orchestrator
-        result["subgraph_error"] = state.subgraph_error
-        return result
-
-    graph.add_node("create_asset_spec", create_asset_spec_node)
-    graph.add_node("persist_assets", persist_project_details_to_database)
-
-    # Define flow following V9 patterns
-    graph.set_entry_point("generate_and_store")
-    graph.add_edge("generate_and_store", "create_asset_spec")
-    graph.add_edge("create_asset_spec", "persist_assets")
-    graph.add_edge("persist_assets", "pause_for_inspection")
-    graph.add_edge("pause_for_inspection", END)
-
-    # Inherit parent's checkpointer when used as a subgraph
-    return graph.compile(checkpointer=True)
-
-# Description: V10 Project Details extraction converted from V9 patterns.
-# Uses LLM with structured output instead of regex patterns.
-# Stores results in assets.metadata.llm_outputs per knowledge graph.
-# NO MOCK DATA - Real LLM calls with comprehensive extraction.
-
+    return graph.compile()

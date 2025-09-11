@@ -104,8 +104,9 @@ export default function CapaTracking({ projectId }: CapaTrackingProps) {
     let completedActions = 0
 
     // Check if actions have completion tracking
-    if (capa.content.completed_actions) {
-      completedActions = capa.content.completed_actions.length
+    const completedList = (capa as any)?.content?.completed_actions as string[] | undefined
+    if (Array.isArray(completedList)) {
+      completedActions = completedList.length
     } else {
       // Estimate completion based on status and time
       const now = new Date()
