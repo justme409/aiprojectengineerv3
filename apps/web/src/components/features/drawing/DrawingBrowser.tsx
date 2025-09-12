@@ -51,6 +51,18 @@ interface DrawingBrowserProps {
   projectId: string
 }
 
+// Drawing subtypes for categorization
+const DRAWING_TYPES = [
+  'General Arrangement',
+  'Section',
+  'Elevation',
+  'Detail',
+  'Plan',
+  'Schedule',
+  'Diagram',
+  'Layout'
+]
+
 // Helper function to get drawing subtype from content/metadata
 function getDrawingSubtype(drawing: Drawing): string {
   try {
@@ -260,7 +272,7 @@ const columns: ColumnDef<Drawing>[] = [
                 >
                   <History className="h-4 w-4" />
                   {allRevisions.length > 1 && (
-                    <span className="ml-1 text-xs bg-blue-100 text-blue-800 px-1 rounded">
+                    <span className="ml-1 text-xs bg-muted text-foreground px-1 rounded">
                       {allRevisions.length}
                     </span>
                   )}
@@ -275,7 +287,7 @@ const columns: ColumnDef<Drawing>[] = [
                 </DialogHeader>
                 <div className="space-y-4">
                   {allRevisions.map((revisionDrawing, index) => (
-                    <Card key={revisionDrawing.id} className={index === 0 ? 'border-blue-200 bg-blue-50' : ''}>
+                    <Card key={revisionDrawing.id} className={index === 0 ? 'border-border bg-muted' : ''}>
                       <CardContent className="pt-4">
                         <div className="flex justify-between items-center">
                           <div className="flex-1">
@@ -359,17 +371,6 @@ export default function DrawingBrowser({ projectId }: DrawingBrowserProps) {
     fetchDrawings()
   }, [fetchDrawings])
 
-  // Drawing subtypes for categorization
-  const DRAWING_TYPES = [
-    'General Arrangement',
-    'Section',
-    'Elevation',
-    'Detail',
-    'Plan',
-    'Schedule',
-    'Diagram',
-    'Layout'
-  ]
 
   // Group drawings by type
   const drawingsByType = useMemo(() => {

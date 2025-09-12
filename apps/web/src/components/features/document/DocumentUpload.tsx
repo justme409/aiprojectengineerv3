@@ -76,7 +76,7 @@ export default function DocumentUpload({ projectId }: DocumentUploadProps) {
 			<div className="text-center">
 				<div className="mb-4">
 					<label className="cursor-pointer">
-						<span className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+						<span className="inline-block bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">
 							{uploading ? 'Uploading...' : 'Select Files'}
 						</span>
 						<input
@@ -93,7 +93,7 @@ export default function DocumentUpload({ projectId }: DocumentUploadProps) {
 					Upload project documents. Files will be processed by AI for content extraction.
 				</p>
 				{progress && (
-					<p className="mt-2 text-sm text-blue-600">{progress}</p>
+					<p className="mt-2 text-sm text-primary">{progress}</p>
 				)}
 			</div>
 		</div>

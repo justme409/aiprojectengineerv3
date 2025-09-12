@@ -24,19 +24,19 @@ export async function GET(request: NextRequest) {
         if (isSuccessful) {
           return NextResponse.json({
             status: 'completed',
-            redirect_url: '/app/dashboard?checkout=success'
+            redirect_url: '/dashboard?checkout=success'
           })
         } else {
           return NextResponse.json({
             status: 'failed',
-            redirect_url: '/app/dashboard?checkout=failed'
+            redirect_url: '/dashboard?checkout=failed'
           })
         }
       } catch (stripeError) {
         console.error('Stripe session check error:', stripeError)
         return NextResponse.json({
           status: 'error',
-          redirect_url: '/app/dashboard?checkout=error'
+          redirect_url: '/dashboard?checkout=error'
         })
       }
     }
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       authenticated: !!session,
       user: session?.user,
-      redirect_url: session ? '/app/dashboard' : '/auth/login'
+      redirect_url: session ? '/dashboard' : '/auth/login'
     })
   } catch (error) {
     console.error('Check redirect status error:', error)

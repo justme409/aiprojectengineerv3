@@ -49,7 +49,7 @@ export default function ClientLotList({ projectId }: ClientLotListProps) {
       case 'completed':
         return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>
       case 'in_progress':
-        return <Badge className="bg-blue-100 text-blue-800"><Clock className="w-3 h-3 mr-1" />In Progress</Badge>
+        return <Badge className="bg-muted text-foreground"><Clock className="w-3 h-3 mr-1" />In Progress</Badge>
       case 'on_hold':
         return <Badge className="bg-yellow-100 text-yellow-800"><AlertTriangle className="w-3 h-3 mr-1" />On Hold</Badge>
       default:
@@ -73,7 +73,7 @@ export default function ClientLotList({ projectId }: ClientLotListProps) {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -109,7 +109,7 @@ export default function ClientLotList({ projectId }: ClientLotListProps) {
             <CardTitle className="text-sm font-medium">In Progress</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-2xl font-bold text-primary">
               {lots.filter(l => l.status === 'in_progress').length}
             </div>
           </CardContent>

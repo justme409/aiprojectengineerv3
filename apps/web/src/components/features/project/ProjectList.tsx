@@ -2,16 +2,36 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { MoreVertical, FolderOpen } from 'lucide-react'
 
 interface Project {
   id: string
   name: string
-  description: string
-  status: string
+  description?: string
+  location?: string
+  client_name?: string
   created_at: string
   organization_name: string
+  projectAsset?: {
+    name?: string
+    content?: {
+      client?: string
+      client_name?: string
+      project_address?: string
+      location?: string
+    }
+  }
+  displayName?: string
+  displayClient?: string
 }
 
 export default function ProjectList() {
@@ -24,10 +44,14 @@ export default function ProjectList() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/v1/projects')
+      const response = await fetch('/api/v1/projects?enriched=true')
       if (response.ok) {
         const data = await response.json()
-        setProjects(data.projects)
+        // Ensure projects are sorted by created date (newest first)
+        const sortedProjects = data.projects.sort((a: Project, b: Project) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        setProjects(sortedProjects)
       }
     } catch (error) {
       console.error('Error fetching projects:', error)
@@ -38,85 +62,114 @@ export default function ProjectList() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-48 bg-gray-200 rounded"></div>
-            ))}
-          </div>
+      <div className="container mx-auto py-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div className="h-8 bg-muted rounded w-32 animate-pulse"></div>
+          <div className="h-10 bg-muted rounded w-32 animate-pulse"></div>
         </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex space-x-4">
+                  <div className="h-4 bg-muted rounded flex-1 animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded flex-1 animate-pulse"></div>
+                  <div className="h-4 bg-muted rounded flex-1 animate-pulse"></div>
+                  <div className="h-8 bg-muted rounded w-20 animate-pulse"></div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
-        <Link href="/app/projects/new">
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            New Project
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Projects</h1>
+        <Link href="/projects/new">
+          <Button>
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Create Project
           </Button>
         </Link>
       </div>
 
-      {projects.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-gray-500 mb-4">
-            <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-          <p className="text-gray-500 mb-6">Get started by creating your first project.</p>
-          <Link href="/app/projects/new">
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              Create Project
-            </Button>
-          </Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
-            <Card key={project.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <CardTitle className="flex justify-between items-start">
-                  <span className="truncate">{project.name || `Project ${project.id.slice(0,8)}`}</span>
-                  <span className={`px-2 py-1 text-xs rounded-full ${
-                    project.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {project.status}
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                  {project.description || 'No description available'}
-                </p>
-                <p className="text-xs text-gray-500 mb-4">
-                  {project.organization_name}
-                </p>
-                <div className="flex space-x-2">
-                  <Link href={`/app/projects/${project.id}/overview`}>
-                    <Button variant="outline" size="sm">
-                      Overview
-                    </Button>
-                  </Link>
-                  <Link href={`/app/projects/${project.id}/documents`}>
-                    <Button variant="outline" size="sm">
-                      Documents
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Card>
+        <CardContent className="pt-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Project Name</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {projects.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">
+                    No projects found. Create your first project to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                projects.map((project) => (
+                  <TableRow key={project.id}>
+                    <TableCell className="font-medium">
+                      <Link
+                        href={`/projects/${project.id}/overview`}
+                        className="hover:underline"
+                      >
+                        {project.displayName || project.name || `Project ${project.id.slice(0,8)}`}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      {project.projectAsset?.content?.project_address || project.projectAsset?.content?.location || project.location || 'Location not specified'}
+                    </TableCell>
+                    <TableCell>
+                      {project.displayClient || project.client_name || 'Client unknown'}
+                    </TableCell>
+                    <TableCell>
+                      {new Date(project.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreVertical className="h-4 w-4" />
+                            <span className="sr-only">Open menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/projects/${project.id}/overview`}>
+                              View Project
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/projects/${project.id}/documents`}>
+                              Documents
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/projects/${project.id}/settings`}>
+                              Settings
+                            </Link>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -6,7 +6,7 @@ export default async function SignupPage() {
   const session = await auth()
 
   if (session) {
-    redirect('/app/dashboard')
+    redirect('/dashboard')
   }
 
   return (
@@ -17,7 +17,7 @@ export default async function SignupPage() {
             Create your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Join ProjectPro to manage your construction quality
+            Join AI Project Engineer to manage your construction quality
           </p>
         </div>
         <SignupForm />

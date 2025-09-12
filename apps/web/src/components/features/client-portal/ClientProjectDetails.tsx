@@ -167,7 +167,7 @@ export default function ClientProjectDetails({ projectId }: ClientProjectDetails
             <CardContent>
               <div className="space-y-3">
                 <div className="flex items-start space-x-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                  <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                   <div className="flex-1">
                     <p className="text-sm">Quality inspection completed</p>
                     <p className="text-xs text-muted-foreground">2 hours ago</p>

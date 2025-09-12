@@ -110,7 +110,7 @@ export default function ItpTemplateDetailClient({
           {/* Header */}
           <div className="mb-8">
             <Link
-              href={isClientPortal ? `/portal/projects/${projectId}/lots` : `/app/projects/${projectId}/lots`}
+              href={isClientPortal ? `/portal/projects/${projectId}/lots` : `/projects/${projectId}/lots`}
               className="text-sm text-muted-foreground hover:underline flex items-center mb-4"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -165,7 +165,7 @@ export default function ItpTemplateDetailClient({
                 </p>
                 {!isClientPortal && (
                   <Button asChild>
-                    <Link href={`/app/projects/${projectId}/quality/itp-templates`}>
+                    <Link href={`/projects/${projectId}/quality/itp-templates`}>
                       Browse ITP Templates
                     </Link>
                   </Button>
@@ -200,7 +200,7 @@ export default function ItpTemplateDetailClient({
         {/* Header */}
         <div className="mb-8">
           <Link
-            href={isClientPortal ? `/portal/projects/${projectId}/itp-templates` : `/app/projects/${projectId}/quality/itp-templates`}
+            href={isClientPortal ? `/portal/projects/${projectId}/itp-templates` : `/projects/${projectId}/quality/itp-templates`}
             className="text-sm text-muted-foreground hover:underline flex items-center mb-4"
           >
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -333,7 +333,7 @@ export default function ItpTemplateDetailClient({
                     </p>
                   </div>
                   <Button variant="outline" asChild>
-                    <Link href={`/app/projects/${projectId}/lots/${lot.id}`}>
+                    <Link href={`/projects/${projectId}/lots/${lot.id}`}>
                       <Eye className="mr-2 h-4 w-4" />
                       View Lot Details
                     </Link>

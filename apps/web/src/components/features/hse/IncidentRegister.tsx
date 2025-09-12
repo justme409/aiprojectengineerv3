@@ -65,7 +65,7 @@ export default function IncidentRegister({ projectId }: IncidentRegisterProps) {
       case 'closed':
         return 'bg-green-100 text-green-800'
       case 'investigating':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-muted text-foreground'
       case 'open':
         return 'bg-yellow-100 text-yellow-800'
       default:
@@ -92,7 +92,7 @@ export default function IncidentRegister({ projectId }: IncidentRegisterProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Incident Register</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Report Incident
         </Button>
       </div>
@@ -106,7 +106,7 @@ export default function IncidentRegister({ projectId }: IncidentRegisterProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No incidents reported</h3>
           <p className="text-gray-500 mb-6">All incidents and near misses will be tracked here.</p>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-primary hover:bg-primary/90">
             Report Incident
           </Button>
         </div>

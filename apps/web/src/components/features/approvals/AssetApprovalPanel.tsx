@@ -34,24 +34,24 @@ export default function AssetApprovalPanel({
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const fetchApprovals = async () => {
+      try {
+        setLoading(true)
+        // Fetch approval edges for this asset
+        const response = await fetch(`/api/v1/assets/${assetId}/approvals`)
+        if (response.ok) {
+          const data = await response.json()
+          setApprovals(data.approvals || [])
+        }
+      } catch (error) {
+        console.error('Error fetching approvals:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchApprovals()
   }, [assetId])
-
-  const fetchApprovals = async () => {
-    try {
-      setLoading(true)
-      // Fetch approval edges for this asset
-      const response = await fetch(`/api/v1/assets/${assetId}/approvals`)
-      if (response.ok) {
-        const data = await response.json()
-        setApprovals(data.approvals || [])
-      }
-    } catch (error) {
-      console.error('Error fetching approvals:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const getApprovalIcon = (decision: string) => {
     switch (decision) {

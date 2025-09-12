@@ -217,7 +217,7 @@ export default function ItpTemplateEditorEnhanced({
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -431,7 +431,7 @@ export default function ItpTemplateEditorEnhanced({
                   <select
                     value={editingItem.pointType}
                     onChange={(e) => setEditingItem(prev => prev ? { ...prev, pointType: e.target.value as any } : null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="record">Record</option>
                     <option value="surveillance">Surveillance</option>

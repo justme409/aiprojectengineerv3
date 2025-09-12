@@ -47,29 +47,55 @@ export default function NcrsPage() {
   const [severityFilter, setSeverityFilter] = useState('all')
 
   useEffect(() => {
+    const fetchNCRs = async () => {
+      try {
+        setLoading(true)
+        // Fetch NCRs from assets
+        const response = await fetch(`/api/v1/assets?project_id=${projectId}&type=ncr`)
+        if (response.ok) {
+          const data = await response.json()
+          const transformedNcrs = transformAssetsToNCRs(data.assets || [])
+          setNcrs(transformedNcrs)
+        }
+      } catch (error) {
+        console.error('Error fetching NCRs:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchNCRs()
   }, [projectId])
 
   useEffect(() => {
+    const filterNCRs = () => {
+      let filtered = ncrs
+
+      // Apply search filter
+      if (searchTerm) {
+        filtered = filtered.filter(ncr =>
+          ncr.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          ncr.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          ncr.category?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      }
+
+      // Apply status filter
+      if (statusFilter !== 'all') {
+        filtered = filtered.filter(ncr => ncr.status === statusFilter)
+      }
+
+      // Apply severity filter
+      if (severityFilter !== 'all') {
+        filtered = filtered.filter(ncr => ncr.severity === severityFilter)
+      }
+
+      setFilteredNcrs(filtered)
+    }
+
     filterNCRs()
   }, [ncrs, searchTerm, statusFilter, severityFilter])
 
-  const fetchNCRs = async () => {
-    try {
-      setLoading(true)
-      // Fetch NCRs from assets
-      const response = await fetch(`/api/v1/assets?project_id=${projectId}&type=ncr`)
-      if (response.ok) {
-        const data = await response.json()
-        const transformedNcrs = transformAssetsToNCRs(data.assets || [])
-        setNcrs(transformedNcrs)
-      }
-    } catch (error) {
-      console.error('Error fetching NCRs:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const transformAssetsToNCRs = (assets: any[]): NCR[] => {
     return assets.map(asset => ({
@@ -88,30 +114,6 @@ export default function NcrsPage() {
     }))
   }
 
-  const filterNCRs = () => {
-    let filtered = [...ncrs]
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(ncr =>
-        ncr.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ncr.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ncr.category.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    }
-
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(ncr => ncr.status === statusFilter)
-    }
-
-    // Apply severity filter
-    if (severityFilter !== 'all') {
-      filtered = filtered.filter(ncr => ncr.severity === severityFilter)
-    }
-
-    setFilteredNcrs(filtered)
-  }
 
   const getSeverityBadge = (severity: string) => {
     const variants = {

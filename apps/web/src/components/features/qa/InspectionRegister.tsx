@@ -129,7 +129,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 				</div>
 				<button
 					onClick={handleCreateIR}
-					className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+					className="bg-primary text-white px-4 py-2 rounded hover:bg-primary/90"
 				>
 					Create IR
 				</button>
@@ -168,7 +168,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 									{ir.content?.scheduled_at ? new Date(ir.content.scheduled_at).toLocaleDateString() : 'Not scheduled'}
 								</td>
 								<td className="px-4 py-2">
-									<button className="text-blue-600 hover:text-blue-800 text-sm">
+									<button className="text-primary hover:text-foreground text-sm">
 										View Details
 									</button>
 								</td>
@@ -213,7 +213,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 										required
 										value={formData.checkpoint_id}
 										onChange={(e) => handleInputChange('checkpoint_id', e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 										placeholder="e.g., IR-001"
 									/>
 								</div>
@@ -225,7 +225,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 										type="number"
 										value={formData.sla_hours}
 										onChange={(e) => handleInputChange('sla_hours', parseInt(e.target.value))}
-										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 										min="1"
 									/>
 								</div>
@@ -240,7 +240,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 									required
 									value={formData.name}
 									onChange={(e) => handleInputChange('name', e.target.value)}
-									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 									placeholder="Inspection request title"
 								/>
 							</div>
@@ -252,7 +252,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 								<textarea
 									value={formData.description}
 									onChange={(e) => handleInputChange('description', e.target.value)}
-									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 									rows={3}
 									placeholder="Describe the inspection requirements"
 								/>
@@ -266,7 +266,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 									type="datetime-local"
 									value={formData.scheduled_at}
 									onChange={(e) => handleInputChange('scheduled_at', e.target.value)}
-									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+									className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 								/>
 							</div>
 
@@ -279,7 +279,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 										type="text"
 										value={formData.lot_asset_id}
 										onChange={(e) => handleInputChange('lot_asset_id', e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 										placeholder="UUID of related lot"
 									/>
 								</div>
@@ -291,7 +291,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 										type="text"
 										value={formData.wbs_node_asset_id}
 										onChange={(e) => handleInputChange('wbs_node_asset_id', e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 										placeholder="UUID of WBS node"
 									/>
 								</div>
@@ -303,7 +303,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 										type="text"
 										value={formData.lbs_node_asset_id}
 										onChange={(e) => handleInputChange('lbs_node_asset_id', e.target.value)}
-										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+										className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
 										placeholder="UUID of LBS node"
 									/>
 								</div>
@@ -320,7 +320,7 @@ export default function InspectionRegister({ projectId }: InspectionRegisterProp
 								</button>
 								<button
 									type="submit"
-									className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+									className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
 									disabled={isSubmitting}
 								>
 									{isSubmitting ? 'Creating...' : 'Create Inspection Request'}

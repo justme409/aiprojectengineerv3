@@ -38,7 +38,7 @@ const planTypes = {
     title: 'Quality Management Plan',
     description: 'Comprehensive quality assurance and control procedures',
     icon: Shield,
-    color: 'blue'
+    color: 'primary'
   },
   emp: {
     title: 'Environmental Management Plan',
@@ -67,28 +67,25 @@ export default function ManagementPlansPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchPlans()
-  }, [projectId])
-
-  const fetchPlans = async () => {
-    try {
-      setLoading(true)
-      // Fetch management plans from assets
-      const response = await fetch(`/api/v1/assets?projectId=${projectId}&type=plan`)
-      if (response.ok) {
-        const data = await response.json()
-        // Transform assets into management plans format
-        const transformedPlans = transformAssetsToPlans(data.assets || [])
-        setPlans(transformedPlans)
+    const fetchPlans = async () => {
+      try {
+        setLoading(true)
+        // Fetch management plans from assets
+        const response = await fetch(`/api/v1/assets?projectId=${projectId}&type=plan`)
+        if (response.ok) {
+          const data = await response.json()
+          // Transform assets into management plans format
+          const transformedPlans = transformAssetsToPlans(data.assets || [])
+          setPlans(transformedPlans)
+        }
+      } catch (error) {
+        console.error('Error fetching plans:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error fetching plans:', error)
-    } finally {
-      setLoading(false)
     }
-  }
 
-  const transformAssetsToPlans = (assets: any[]): ManagementPlan[] => {
+    const transformAssetsToPlans = (assets: any[]): ManagementPlan[] => {
     const plans: ManagementPlan[] = []
 
     assets.forEach(asset => {
@@ -129,7 +126,10 @@ export default function ManagementPlansPage() {
     })
 
     return plans
-  }
+    }
+
+    fetchPlans()
+  }, [projectId])
 
   const getStatusBadge = (status: string) => {
     const variants = {

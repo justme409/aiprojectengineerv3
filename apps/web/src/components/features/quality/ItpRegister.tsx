@@ -91,7 +91,7 @@ export default function ItpRegister({ projectId }: ItpRegisterProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">ITP Register</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Create ITP
         </Button>
       </div>
@@ -105,7 +105,7 @@ export default function ItpRegister({ projectId }: ItpRegisterProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No ITP records yet</h3>
           <p className="text-gray-500 mb-6">Create inspection and test plans to track quality requirements.</p>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-primary hover:bg-primary/90">
             Create ITP
           </Button>
         </div>

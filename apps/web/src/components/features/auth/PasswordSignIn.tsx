@@ -29,7 +29,7 @@ export default function PasswordSignIn() {
       if (result?.error) {
         setError('Invalid credentials')
       } else {
-        router.push('/app/dashboard')
+        router.push('/dashboard')
       }
     } catch (error) {
       setError('An error occurred. Please try again.')
@@ -91,7 +91,7 @@ export default function PasswordSignIn() {
       <div className="text-center">
         <a
           href="#"
-          className="text-sm text-blue-600 hover:text-blue-500"
+          className="text-sm text-black hover:text-gray-600"
         >
           Forgot your password?
         </a>

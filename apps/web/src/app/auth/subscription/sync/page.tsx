@@ -36,8 +36,8 @@ export default async function SubscriptionSyncPage() {
   const result = await handleSubscriptionSync()
 
   if (result.success) {
-    redirect('/app/dashboard?sync=success')
+    redirect('/dashboard?sync=success')
   } else {
-    redirect('/app/dashboard?sync=error')
+    redirect('/dashboard?sync=error')
   }
 }

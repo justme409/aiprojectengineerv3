@@ -6,7 +6,7 @@ export default async function LoginPage() {
   const session = await auth()
 
   if (session) {
-    redirect('/app/dashboard')
+    redirect('/dashboard')
   }
 
   return (
@@ -17,7 +17,7 @@ export default async function LoginPage() {
             Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Access your ProjectPro dashboard
+            Access your AI Project Engineer dashboard
           </p>
         </div>
         <LoginForm />

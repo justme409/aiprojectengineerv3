@@ -9,13 +9,13 @@ export default function LotCloseoutPack() {
   const lotId = (params as any)?.lotId as string | undefined
 
   const href = projectId && lotId
-    ? `/app/projects/${projectId}/lots/${lotId}/closeout`
-    : '/app/projects'
+    ? `/projects/${projectId}/lots/${lotId}/closeout`
+    : '/projects'
 
   return (
     <div className="p-4">
       <p className="mb-2">Open the Lot Closeout page:</p>
-      <Link className="text-blue-600 underline" href={href}>{href}</Link>
+      <Link className="text-primary underline" href={href}>{href}</Link>
     </div>
   )
 }

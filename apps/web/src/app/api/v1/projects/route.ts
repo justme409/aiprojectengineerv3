@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
+import { getEnrichedProjects } from '@/lib/actions/project-actions'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     console.log('Session:', session)
@@ -13,6 +14,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { searchParams } = new URL(request.url)
+    const enriched = searchParams.get('enriched') === 'true'
+
+    if (enriched) {
+      // Use the new enriched projects function
+      const enrichedProjects = await getEnrichedProjects()
+      console.log('Enriched projects found:', enrichedProjects.map(p => ({ id: p.id, displayName: p.displayName })))
+      return NextResponse.json({ projects: enrichedProjects })
+    }
+
+    // Original logic for backward compatibility
     const userId = (session.user as any).id
     console.log('Using user ID:', userId)
 

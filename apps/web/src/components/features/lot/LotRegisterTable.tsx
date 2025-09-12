@@ -55,7 +55,7 @@ export default function LotRegisterTable({ projectId }: LotRegisterTableProps) {
       case 'active':
         return 'bg-green-100 text-green-800'
       case 'closed':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-muted text-foreground'
       case 'on_hold':
         return 'bg-yellow-100 text-yellow-800'
       default:
@@ -88,7 +88,7 @@ export default function LotRegisterTable({ projectId }: LotRegisterTableProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Lot Register</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Create Lot
         </Button>
       </div>
@@ -102,7 +102,7 @@ export default function LotRegisterTable({ projectId }: LotRegisterTableProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No lots yet</h3>
           <p className="text-gray-500 mb-6">Create work lots to organize your construction activities.</p>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-primary hover:bg-primary/90">
             Create Lot
           </Button>
         </div>

@@ -82,7 +82,7 @@ export default function SwmsRegister({ projectId }: SwmsRegisterProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">SWMS Register</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Create SWMS
         </Button>
       </div>
@@ -96,7 +96,7 @@ export default function SwmsRegister({ projectId }: SwmsRegisterProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No SWMS documents yet</h3>
           <p className="text-gray-500 mb-6">Create Safe Work Method Statements for your project activities.</p>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-primary hover:bg-primary/90">
             Create SWMS
           </Button>
         </div>

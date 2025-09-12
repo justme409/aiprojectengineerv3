@@ -72,7 +72,7 @@ export default function ReportsDashboard({ projectId }: ReportsDashboardProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Export Report
         </Button>
       </div>
@@ -201,7 +201,7 @@ export default function ReportsDashboard({ projectId }: ReportsDashboardProps) {
                   <CardTitle className="text-lg">Handover Progress</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold text-blue-600">{reportData.handover_progress}%</div>
+                  <div className="text-3xl font-bold text-primary">{reportData.handover_progress}%</div>
                   <p className="text-sm text-gray-600">Records delivered</p>
                 </CardContent>
               </Card>

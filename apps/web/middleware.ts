@@ -7,7 +7,6 @@ const migrations: Array<{ from: RegExp, to: (match: RegExpMatchArray) => string 
 	{ from: /^\/subscription-required$/, to: () => '/auth/subscription/required' },
 	{ from: /^\/subscription-sync$/, to: () => '/auth/subscription/sync' },
 	{ from: /^\/account$/, to: () => '/app/account' },
-	{ from: /^\/dashboard$/, to: () => '/app/dashboard' },
 	{ from: /^\/projects$/, to: () => '/app/projects' },
 	{ from: /^\/projects\/([^/]+)$/, to: (m) => `/app/projects/${m[1]}/overview` },
 	{ from: /^\/projects\/([^/]+)\/documents$/, to: (m) => `/app/projects/${m[1]}/documents` },

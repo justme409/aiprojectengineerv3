@@ -24,7 +24,7 @@ export default function NewProjectForm() {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || `Request failed: ${res.status}`)
       }
-      window.location.href = '/app/projects'
+      window.location.href = '/projects'
     } catch (err: any) {
       setError(err.message || 'Failed to create project')
     } finally {
@@ -53,7 +53,7 @@ export default function NewProjectForm() {
         </div>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50" disabled={submitting}>
+      <button type="submit" className="bg-primary text-white px-4 py-2 rounded disabled:opacity-50" disabled={submitting}>
         {submitting ? 'Creating...' : 'Create project'}
       </button>
     </form>

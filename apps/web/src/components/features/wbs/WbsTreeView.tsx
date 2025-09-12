@@ -205,9 +205,9 @@ export default function WbsTreeView({
         .attr("fill", d => {
           const isCollapsed = d.data._children && d.data._children.length > 0
           switch (d.data.type) {
-            case 'project': return isCollapsed ? '#f44336' : '#2196F3'
+            case 'project': return isCollapsed ? '#f44336' : '#8B5CF6'
             case 'discipline': return isCollapsed ? '#ff9800' : '#4CAF50'
-            case 'work_package': return isCollapsed ? '#9c27b0' : '#00bcd4'
+            case 'work_package': return isCollapsed ? '#9c27b0' : '#10B981'
             case 'activity': return '#9E9E9E'
             default: return '#757575'
           }
@@ -227,7 +227,7 @@ export default function WbsTreeView({
     nodeGroup.filter(d => d.data.type === 'work_package' && d.data.data?.content?.itp_required === true)
         .append("circle")
         .attr("r", 1.5)
-        .attr("fill", "#00695C")
+        .attr("fill", "#059669")
 
     // Node labels
     nodeGroup.append("text")

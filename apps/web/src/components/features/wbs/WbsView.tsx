@@ -72,7 +72,7 @@ export default function WbsView({ projectId }: WbsViewProps) {
       <div key={node.id} className="w-full">
         <div
           className={`flex items-center p-3 hover:bg-gray-50 cursor-pointer border-l-4 ${
-            level === 0 ? 'border-blue-500' : 'border-gray-300'
+            level === 0 ? 'border-primary' : 'border-gray-300'
           }`}
           style={{ paddingLeft: `${(level + 1) * 20 + 12}px` }}
           onClick={() => hasChildren && toggleNode(node.id)}
@@ -137,7 +137,7 @@ export default function WbsView({ projectId }: WbsViewProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Work Breakdown Structure</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Add Root Node
         </Button>
       </div>
@@ -151,7 +151,7 @@ export default function WbsView({ projectId }: WbsViewProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No WBS structure yet</h3>
           <p className="text-gray-500 mb-6">Create your work breakdown structure to organize project deliverables.</p>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-primary hover:bg-primary/90">
             Create WBS
           </Button>
         </div>

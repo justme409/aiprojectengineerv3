@@ -3,10 +3,10 @@ import { Crown, CheckCircle, ArrowRight } from 'lucide-react'
 
 export default function SubscriptionRequiredPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center p-4">
       <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-8 text-center">
+        <div className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground p-8 text-center">
           <Crown className="w-16 h-16 mx-auto mb-4" />
           <h1 className="text-3xl font-bold mb-2">Upgrade Required</h1>
           <p className="text-lg opacity-90">Unlock the full power of ProjectPro</p>
@@ -24,10 +24,10 @@ export default function SubscriptionRequiredPage() {
           {/* Pricing Cards */}
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             {/* Free Trial */}
-            <div className="border-2 border-blue-200 rounded-lg p-6 bg-blue-50">
+            <div className="border-2 border-border rounded-lg p-6 bg-muted">
               <div className="text-center mb-4">
                 <h3 className="text-xl font-semibold text-gray-900">Free Trial</h3>
-                <div className="text-3xl font-bold text-blue-600 mt-2">$0</div>
+                <div className="text-3xl font-bold text-primary mt-2">$0</div>
                 <div className="text-sm text-gray-600">14 days</div>
               </div>
 
@@ -52,7 +52,7 @@ export default function SubscriptionRequiredPage() {
 
               <Link
                 href="/pricing"
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
               >
                 Start Free Trial
                 <ArrowRight className="w-4 h-4" />
@@ -114,8 +114,8 @@ export default function SubscriptionRequiredPage() {
 
             <div className="grid md:grid-cols-3 gap-6">
               <div className="text-center">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <CheckCircle className="w-6 h-6 text-blue-600" />
+                <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mx-auto mb-3">
+                  <CheckCircle className="w-6 h-6 text-primary" />
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-2">Quality Management</h4>
                 <p className="text-sm text-gray-600">Complete ITP, NCR, and compliance tracking</p>

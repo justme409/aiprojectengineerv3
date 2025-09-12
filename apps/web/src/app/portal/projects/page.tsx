@@ -45,7 +45,7 @@ export default function ClientProjectsPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -91,7 +91,7 @@ export default function ClientProjectsPage() {
               <CardContent>
                 <div className="space-y-3 text-sm">
                   <div className="flex items-start space-x-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
                     <div>
                       <p className="text-gray-900">New inspection report available</p>
                       <p className="text-gray-500">2 hours ago</p>

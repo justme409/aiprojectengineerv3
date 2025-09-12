@@ -32,7 +32,7 @@ export async function GET(
     // TODO: Implement full OAuth token exchange and user creation flow
 
     // Redirect to dashboard on successful authentication
-    return NextResponse.redirect(new URL('/app/dashboard?login=success', request.url))
+    return NextResponse.redirect(new URL('/dashboard?login=success', request.url))
   } catch (error) {
     console.error('OAuth callback error:', error)
     return NextResponse.redirect(new URL('/auth/login?error=oauth_callback', request.url))
@@ -46,7 +46,7 @@ export async function POST(
   try {
     const { provider } = await params
     // Handle POST callbacks if needed
-    return NextResponse.redirect(new URL('/app/dashboard', request.url))
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   } catch (error) {
     console.error('OAuth callback error:', error)
     return NextResponse.redirect(new URL('/auth/login?error=oauth_callback', request.url))

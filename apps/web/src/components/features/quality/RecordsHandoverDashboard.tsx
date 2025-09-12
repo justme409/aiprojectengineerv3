@@ -105,7 +105,7 @@ export default function RecordsHandoverDashboard({ projectId }: RecordsHandoverD
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Records Handover Dashboard</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Export RMP
         </Button>
       </div>
@@ -120,7 +120,7 @@ export default function RecordsHandoverDashboard({ projectId }: RecordsHandoverD
             <div className="mb-4">
               <Progress value={handoverProgress} className="w-full" />
             </div>
-            <p className="text-2xl font-bold text-blue-600">
+            <p className="text-2xl font-bold text-primary">
               {handoverProgress.toFixed(1)}%
             </p>
             <p className="text-sm text-gray-600">Records delivered</p>

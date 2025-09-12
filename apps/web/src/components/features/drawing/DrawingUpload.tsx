@@ -159,7 +159,7 @@ export default function DrawingUpload({ projectId }: DrawingUploadProps) {
 							onChange={handleFileSelect}
 							accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg"
 							disabled={uploading}
-							className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:cursor-pointer cursor-pointer"
+							className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-muted file:text-primary hover:file:bg-muted file:cursor-pointer cursor-pointer"
 						/>
 						{selectedFile && (
 							<div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
@@ -205,7 +205,7 @@ export default function DrawingUpload({ projectId }: DrawingUploadProps) {
 							id="drawing-type"
 							value={drawingType}
 							onChange={(e) => setDrawingType(e.target.value)}
-							className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+							className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
 							disabled={uploading}
 						>
 							{DRAWING_TYPES.map(type => (
@@ -219,7 +219,7 @@ export default function DrawingUpload({ projectId }: DrawingUploadProps) {
 					<Button
 						onClick={handleUpload}
 						disabled={uploading || !selectedFile || !drawingNumber.trim()}
-						className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+						className="flex-1 bg-primary hover:bg-primary/90 text-white"
 					>
 						{uploading ? (
 							<Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -236,7 +236,7 @@ export default function DrawingUpload({ projectId }: DrawingUploadProps) {
 							? 'bg-red-500/10 text-red-700 border border-red-500/50'
 							: progress.includes('success')
 							? 'bg-green-500/10 text-green-700 border border-green-500/50'
-							: 'bg-blue-500/10 text-blue-700 border border-blue-500/50'
+							: 'bg-primary/10 text-primary border border-primary/50'
 					}`}>
 						{progress.includes('failed') || progress.includes('error') ? (
 							<AlertTriangle className="h-4 w-4 flex-shrink-0" />

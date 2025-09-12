@@ -27,8 +27,8 @@ export function OauthSignIn({ onProviderSelect }: OauthSignInProps) {
       name: "Microsoft",
       icon: Building2,
       description: "Sign in with Microsoft 365",
-      color: "hover:bg-blue-50 hover:border-blue-200",
-      iconColor: "text-blue-600"
+      color: "hover:bg-muted hover:border-border",
+      iconColor: "text-primary"
     },
     {
       id: "github",

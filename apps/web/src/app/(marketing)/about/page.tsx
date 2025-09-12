@@ -1,166 +1,79 @@
-import Link from 'next/link'
-import { CheckCircle, Users, Shield, Zap, Award, Target } from 'lucide-react'
+import Image from 'next/image';
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen bg-white">
-      {/* Hero Section */}
-      <section className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white py-20">
-        <div className="container mx-auto px-4 text-center">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6">
+    <div className="container mx-auto py-16 px-4 sm:px-6 lg:px-8 bg-white min-h-screen">
+      <div className="max-w-4xl mx-auto">
+        <header className="mb-12 text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
             About ProjectPro
           </h1>
-          <p className="text-xl md:text-2xl mb-8 max-w-3xl mx-auto opacity-90">
-            The most comprehensive construction project management platform,
-            designed by industry experts for construction professionals.
+          <p className="mt-4 text-xl text-slate-600">
+            Purpose‑built QA for civil projects. Run lots, NCRs and drawings day‑to‑day — generate ITPs and plans with AI when you need them.
           </p>
-          <Link
-            href="/pricing"
-            className="bg-white text-blue-600 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-          >
-            Start Free Trial
-          </Link>
-        </div>
-      </section>
+        </header>
 
-      {/* Mission Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Mission</h2>
-            <p className="text-lg text-gray-600 mb-8">
-              To revolutionize construction project management by providing a unified platform
-              that ensures quality, safety, and compliance while maximizing efficiency and profitability.
+        <div className="prose prose-lg prose-slate mx-auto">
+          <section className="mb-12">
+            <h2 className="text-2xl font-bold mb-4 text-slate-900">Our Mission</h2>
+            <p className="text-slate-600 mb-6">
+              Streamline civil project QA by combining robust operational tools with focused AI assistance. Engineers should spend time building — not formatting documents.
             </p>
+          </section>
 
-            <div className="grid md:grid-cols-3 gap-8 mt-12">
-              <div className="text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Target className="w-8 h-8 text-blue-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Quality First</h3>
-                <p className="text-gray-600">Built-in quality management systems ensure compliance with all standards</p>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Shield className="w-8 h-8 text-green-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Safety Focused</h3>
-                <p className="text-gray-600">Comprehensive HSE management keeps your team safe and compliant</p>
-              </div>
-
-              <div className="text-center">
-                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Zap className="w-8 h-8 text-purple-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Efficiency Driven</h3>
-                <p className="text-gray-600">Streamline operations with integrated tools and automated workflows</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Features Section */}
-      <section className="py-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-6">Why Choose ProjectPro?</h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Built specifically for the construction industry with deep expertise in quality management,
-              safety compliance, and project delivery.
+          <section className="mb-12">
+            <h2 className="text-2xl font-bold mb-4 text-slate-900">What We Do</h2>
+            <p className="text-slate-600 mb-6">
+              Operate lots, NCRs, and drawings with speed and control. When you need to create documentation, use AI assistants to generate ITPs and management plans aligned to ISO 9001 — then review and publish.
             </p>
-          </div>
+          </section>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                <CheckCircle className="w-6 h-6 text-blue-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Complete Quality System</h3>
-              <p className="text-gray-600">
-                From ITP creation to final certification, manage your entire quality assurance process.
-              </p>
-            </div>
+          <section className="mb-12">
+            <h2 className="text-2xl font-bold mb-4 text-slate-900">Our Technology</h2>
+            <p className="text-slate-600 mb-6">
+              Modern cloud stack with advanced language models tailored to construction. Native support for Australian standards and a secure, auditable workflow across your QA processes.
+            </p>
+          </section>
 
-            <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                <Shield className="w-6 h-6 text-green-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">HSE Compliance</h3>
-              <p className="text-gray-600">
-                Built-in safety management with SWMS, permits, inductions, and incident tracking.
-              </p>
-            </div>
+          
 
-            <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-                <Users className="w-6 h-6 text-purple-600" />
+          <section className="mb-12">
+            <h2 className="text-2xl font-bold mb-4 text-slate-900">About Me</h2>
+            <div className="flex flex-col md:flex-row items-start gap-6">
+              <div className="flex-1">
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">Thomas Lynch (B.Eng (Civil)) — Founder</h3>
+                <p className="text-slate-600">
+                  I’m a civil and construction engineer focused on practical, reliable QA systems for delivery teams. I’ve worked across major transport infrastructure and utility programs with a strong emphasis on lot closure, NCR workflows, and drawing control. I started ProjectPro to bring modern, AI‑assisted tools to the everyday QA work that engineers actually do on site.
+                </p>
+                <h4 className="text-lg font-semibold text-slate-900 mt-4">Future Outlook</h4>
+                <p className="text-slate-600">
+                  I became fascinated with AI when ChatGPT‑3 was released and have been working obsessively ever since to unlock the economic, productivity, and quality‑of‑life benefits it can bring. I see a future where AI systems are integral to maintaining a competitive edge in the civil construction industry and to delivering better project outcomes — safer delivery, faster and more relevant communication, more efficient construction solutions, larger scale projects, and much more profitable projects.
+                </p>
+                <p className="text-slate-600">
+                  LinkedIn: <a className="text-emerald-700" href="https://www.linkedin.com/in/thomas-lynch-649497123" target="_blank" rel="noopener noreferrer">thomas-lynch-649497123</a>
+                </p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Team Collaboration</h3>
-              <p className="text-gray-600">
-                Connect your entire project team with real-time updates and shared workflows.
-              </p>
+              <Image
+                src="/images/1546603551715.jpg"
+                alt="Thomas Lynch"
+                width={160}
+                height={160}
+                className="rounded-full border border-slate-200 shadow object-cover md:ml-2"
+                priority={false}
+              />
             </div>
+          </section>
 
-            <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-                <Award className="w-6 h-6 text-orange-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Industry Standards</h3>
-              <p className="text-gray-600">
-                Compliant with ISO 9001, ISO 14001, ISO 45001, and jurisdictional requirements.
-              </p>
+          <section>
+            <h2 className="text-2xl font-bold mb-4 text-slate-900">Contact Us</h2>
+            <div className="text-slate-600 space-y-1">
+              <p>Email: <a className="text-emerald-700" href="mailto:tom.lynch@projectpro.pro">tom.lynch@projectpro.pro</a></p>
+              <p>Phone: <a className="text-emerald-700" href="tel:+61468920484">0468 920 484</a></p>
+              <p>Location: Toowoomba, QLD</p>
             </div>
-
-            <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
-                <Zap className="w-6 h-6 text-red-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">AI-Powered</h3>
-              <p className="text-gray-600">
-                Intelligent document processing and automated compliance checking.
-              </p>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
-                <Target className="w-6 h-6 text-indigo-600" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Scalable Solution</h3>
-              <p className="text-gray-600">
-                From small projects to large enterprise deployments, ProjectPro scales with you.
-              </p>
-            </div>
-          </div>
+          </section>
         </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="bg-gray-900 text-white py-20">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl font-bold mb-6">Ready to Transform Your Construction Projects?</h2>
-          <p className="text-xl mb-8 opacity-90 max-w-2xl mx-auto">
-            Join thousands of construction professionals who trust ProjectPro to deliver quality projects on time and within budget.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/pricing"
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            >
-              Start Free Trial
-            </Link>
-            <Link
-              href="/contact"
-              className="border border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-gray-900 transition-colors"
-            >
-              Contact Sales
-            </Link>
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
-  )
-}
+  );
+} 

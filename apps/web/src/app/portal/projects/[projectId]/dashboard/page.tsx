@@ -67,10 +67,10 @@ export default async function ClientDashboardPage({ params }: PageProps) {
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
 					<div className="bg-white p-6 rounded-lg shadow">
 						<h3 className="text-lg font-medium mb-2">Project Progress</h3>
-						<p className="text-3xl font-bold text-blue-600">{metrics.progress}%</p>
+						<p className="text-3xl font-bold text-primary">{metrics.progress}%</p>
 						<div className="w-full bg-gray-200 rounded-full h-2 mt-2">
 							<div
-								className="bg-blue-600 h-2 rounded-full"
+								className="bg-primary h-2 rounded-full"
 								style={{ width: `${metrics.progress}%` }}
 							></div>
 						</div>

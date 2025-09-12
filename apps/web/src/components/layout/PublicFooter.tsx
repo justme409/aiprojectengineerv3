@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button"
 const footerLinks = {
   product: [
     { name: "Features", href: "/#features" },
-    { name: "Pricing", href: "/pricing" },
+    { name: "Pricing", href: "/#pricing" },
     { name: "Security", href: "/security" },
     { name: "About", href: "/about" },
   ],
   legal: [
-    { name: "Privacy Policy", href: "/legal/privacy" },
-    { name: "Terms of Service", href: "/legal/terms" },
+    { name: "Privacy Policy", href: "/privacy" },
+    { name: "Terms of Service", href: "/terms" },
     { name: "Contact", href: "/contact" },
   ],
   social: [
@@ -24,7 +24,7 @@ const footerLinks = {
 
 export function PublicFooter() {
   return (
-    <footer className="border-t bg-background">
+    <footer className="border-t bg-white">
       <div className="container max-w-screen-2xl py-8 md:py-12">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div className="col-span-2">

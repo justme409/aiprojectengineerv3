@@ -82,7 +82,7 @@ export default function DocumentList({ projectId }: DocumentListProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Documents</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Upload Document
         </Button>
       </div>
@@ -96,7 +96,7 @@ export default function DocumentList({ projectId }: DocumentListProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No documents yet</h3>
           <p className="text-gray-500 mb-6">Upload your first project document to get started.</p>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-primary hover:bg-primary/90">
             Upload Document
           </Button>
         </div>

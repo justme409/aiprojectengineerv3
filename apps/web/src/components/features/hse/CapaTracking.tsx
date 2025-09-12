@@ -54,7 +54,7 @@ export default function CapaTracking({ projectId }: CapaTrackingProps) {
       case 'completed':
         return 'bg-green-100 text-green-800'
       case 'in_progress':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-muted text-foreground'
       case 'overdue':
         return 'bg-red-100 text-red-800'
       case 'pending':
@@ -144,7 +144,7 @@ export default function CapaTracking({ projectId }: CapaTrackingProps) {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">CAPA Tracking</h1>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-primary hover:bg-primary/90">
           Create CAPA
         </Button>
       </div>
@@ -158,7 +158,7 @@ export default function CapaTracking({ projectId }: CapaTrackingProps) {
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">No CAPA records yet</h3>
           <p className="text-gray-500 mb-6">Corrective and Preventive Action records will be tracked here.</p>
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-primary hover:bg-primary/90">
             Create CAPA
           </Button>
         </div>
