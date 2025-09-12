@@ -1,5 +1,16 @@
 "use client"
 import { useState, useRef } from 'react'
+import { Button } from '@/components/ui/button'
+import { Upload } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 
 interface DocumentUploadProps {
 	projectId: string
@@ -9,6 +20,7 @@ export default function DocumentUpload({ projectId }: DocumentUploadProps) {
 	const [uploading, setUploading] = useState(false)
 	const [progress, setProgress] = useState('')
 	const fileInputRef = useRef<HTMLInputElement>(null)
+	const [open, setOpen] = useState(false)
 
 	const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const files = Array.from(e.target.files || [])
@@ -72,30 +84,41 @@ export default function DocumentUpload({ projectId }: DocumentUploadProps) {
 	}
 
 	return (
-		<div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
-			<div className="text-center">
-				<div className="mb-4">
-					<label className="cursor-pointer">
-						<span className="inline-block bg-primary text-white px-4 py-2 rounded hover:bg-primary/90">
-							{uploading ? 'Uploading...' : 'Select Files'}
-						</span>
-						<input
-							ref={fileInputRef}
-							type="file"
-							multiple
-							onChange={handleFileSelect}
-							className="hidden"
-							disabled={uploading}
-						/>
-					</label>
+		<Dialog open={open} onOpenChange={setOpen}>
+			<DialogTrigger asChild>
+				<Button variant="outline" size="icon" disabled={uploading} title="Upload documents">
+					<Upload className="h-4 w-4" />
+				</Button>
+			</DialogTrigger>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Upload documents</DialogTitle>
+					<DialogDescription>
+						Select one or more files to upload. They will be processed for content extraction and metadata.
+					</DialogDescription>
+				</DialogHeader>
+				<div className="space-y-3">
+					<input
+						ref={fileInputRef}
+						type="file"
+						multiple
+						onChange={handleFileSelect}
+						disabled={uploading}
+					/>
+					{progress && (
+						<p className="text-sm text-primary">{progress}</p>
+					)}
 				</div>
-				<p className="text-gray-500 text-sm">
-					Upload project documents. Files will be processed by AI for content extraction.
-				</p>
-				{progress && (
-					<p className="mt-2 text-sm text-primary">{progress}</p>
-				)}
-			</div>
-		</div>
+				<DialogFooter>
+					<Button
+						variant="secondary"
+						onClick={() => setOpen(false)}
+						disabled={uploading}
+					>
+						Close
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	)
 }

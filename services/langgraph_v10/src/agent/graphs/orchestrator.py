@@ -9,6 +9,7 @@ from langgraph.graph import StateGraph, START, END
 from agent.graphs.document_extraction import create_document_extraction_graph
 from agent.graphs.project_details import create_project_details_graph
 from agent.graphs.plan_generation import create_plan_generation_graph
+from agent.graphs.document_metadata import create_document_metadata_graph
 from agent.graphs.wbs_extraction import create_wbs_extraction_graph
 from agent.graphs.lbs_extraction import create_lbs_extraction_graph
 from agent.graphs.itp_generation import create_itp_generation_graph
@@ -86,6 +87,7 @@ inspect subgraph checkpoints via API when interrupted.
 # Compile subgraphs and add as nodes
 builder.add_node("document_extraction", create_document_extraction_graph())
 builder.add_node("project_details", create_project_details_graph())
+builder.add_node("document_metadata", create_document_metadata_graph())
 builder.add_node("standards_extraction", create_standards_extraction_graph())
 builder.add_node("plan_generation", create_plan_generation_graph())
 builder.add_node("wbs_extraction", create_wbs_extraction_graph())
@@ -122,7 +124,8 @@ def ensure_documents_are_dicts(state: OrchestratorState) -> OrchestratorState:
 
 builder.add_node("ensure_docs_dict", ensure_documents_are_dicts)
 builder.add_edge("document_extraction", "ensure_docs_dict")
-builder.add_edge("ensure_docs_dict", "project_details")
+builder.add_edge("ensure_docs_dict", "document_metadata")
+builder.add_edge("document_metadata", "project_details")
 builder.add_edge("project_details", "standards_extraction")
 builder.add_edge("standards_extraction", "plan_generation")
 builder.add_edge("plan_generation", "wbs_extraction")

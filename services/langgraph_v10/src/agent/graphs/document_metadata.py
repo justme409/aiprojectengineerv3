@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Optional, Annotated
+from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from langgraph.graph import StateGraph, START, END
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -8,7 +8,11 @@ import uuid
 from datetime import datetime
 from agent.tools.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 from agent.tools.db_fetcher import db_fetcher_step
-from agent.prompts.document_metadata_prompt import DOCUMENT_METADATA_DRAWING_PROMPT, DOCUMENT_METADATA_DOCUMENT_PROMPT
+from agent.prompts.document_metadata_prompt import (
+    CLASSIFY_DOCUMENT_PROMPT,
+    DOCUMENT_METADATA_DRAWING_PROMPT,
+    DOCUMENT_METADATA_DOCUMENT_PROMPT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,141 +26,58 @@ llm = ChatGoogleGenerativeAI(
     thinking_budget=-1,
 )
 
-# Structured Output Models based on knowledge graph schema
-
-class DocumentSummary(BaseModel):
-    """Document summary information"""
-    short: str = Field(description="Brief summary of the document")
-    executive: str = Field(description="Executive-level summary")
-    technical: str = Field(description="Technical summary")
-    audience: str = Field(description="Target audience")
-    tone: str = Field(description="Document tone/style")
-
-class DocumentOutline(BaseModel):
-    """Document outline structure"""
-    level: int = Field(description="Outline level (1-6)")
-    title: str = Field(description="Section title")
-    page_range: Optional[str] = Field(description="Page range for this section")
-
-class DocumentEntities(BaseModel):
-    """Key entities mentioned in the document"""
-    organizations: List[str] = Field(description="Organizations mentioned")
-    persons: List[str] = Field(description="People mentioned")
-    materials: List[str] = Field(description="Materials referenced")
-    equipment: List[str] = Field(description="Equipment referenced")
-    standards: List[str] = Field(description="Standards referenced")
-    clauses: List[str] = Field(description="Clauses referenced")
-    locations: List[str] = Field(description="Locations mentioned")
-    wbs_refs: List[str] = Field(description="WBS references")
-    lbs_refs: List[str] = Field(description="LBS references")
-
-class DocumentRequirement(BaseModel):
-    """Individual requirement extracted from document"""
-    id: str = Field(description="Unique requirement identifier")
-    text: str = Field(description="Requirement text")
-    source_clause: str = Field(description="Source clause reference")
-    mandatory: bool = Field(description="Whether requirement is mandatory")
-    applicability_tags: List[str] = Field(description="Tags for requirement applicability")
-
-class DocumentControl(BaseModel):
-    """Control measure extracted from document"""
-    id: str = Field(description="Unique control identifier")
-    text: str = Field(description="Control description")
-    type: str = Field(description="Control type (preventive, detective, corrective)")
-    maps_to_requirements: List[str] = Field(description="Requirements this control maps to")
-
-class DocumentHazardRisk(BaseModel):
-    """Hazard and risk assessment"""
-    hazard: str = Field(description="Hazard description")
-    context: str = Field(description="Context where hazard occurs")
-    severity: str = Field(description="Severity level")
-    likelihood: str = Field(description="Likelihood of occurrence")
-    risk_rating: str = Field(description="Overall risk rating")
-    controls: List[str] = Field(description="Associated control measures")
-
-class DocumentTask(BaseModel):
-    """Task extracted from document"""
-    step_no: int = Field(description="Step number")
-    description: str = Field(description="Task description")
-    prerequisites: List[str] = Field(description="Prerequisites for this task")
-    acceptance_criteria: List[str] = Field(description="Acceptance criteria")
-
-class DocumentMetric(BaseModel):
-    """Metric extracted from document"""
-    name: str = Field(description="Metric name")
-    value: Any = Field(description="Metric value")
-    unit: str = Field(description="Unit of measurement")
-    method: str = Field(description="Measurement method")
-
-class DocumentDecisionsActions(BaseModel):
-    """Decisions and actions from document"""
-    decisions: List[str] = Field(description="Decisions made")
-    actions: List[str] = Field(description="Required actions")
-
-class DocumentCitation(BaseModel):
-    """Citation from document"""
-    ref_id: str = Field(description="Reference identifier")
-    title: str = Field(description="Citation title")
-    location: str = Field(description="Location in document")
-
-class DocumentAnomaly(BaseModel):
-    """Anomaly or issue found in document"""
-    type: str = Field(description="Type of anomaly")
-    span: str = Field(description="Text span where anomaly occurs")
-    note: str = Field(description="Note about the anomaly")
-
 class DocumentExtractionMeta(BaseModel):
     """Metadata about the extraction process"""
     schema_version: str = Field(description="Schema version used")
     quality_checks: List[str] = Field(description="Quality checks performed")
     warnings: List[str] = Field(description="Warnings during extraction")
 
-class DocumentMetadata(BaseModel):
-    """Complete metadata for a document following knowledge graph schema"""
-    document_id: str = Field(description="Unique document identifier")
-    document_type: str = Field(description="Type of document")
-    document_number: Optional[str] = Field(description="Document number")
-    revision_code: Optional[str] = Field(description="Revision code")
-    summary: DocumentSummary = Field(description="Document summaries")
-    outline: List[DocumentOutline] = Field(description="Document outline")
-    entities: DocumentEntities = Field(description="Key entities")
-    requirements: List[DocumentRequirement] = Field(description="Requirements")
-    controls: List[DocumentControl] = Field(description="Controls")
-    hazards_risks: List[DocumentHazardRisk] = Field(description="Hazards and risks")
-    tasks: List[DocumentTask] = Field(description="Tasks")
-    metrics: List[DocumentMetric] = Field(description="Metrics")
-    decisions_actions: DocumentDecisionsActions = Field(description="Decisions and actions")
-    citations: List[DocumentCitation] = Field(description="Citations")
-    anomalies: List[DocumentAnomaly] = Field(description="Anomalies")
-    extraction_meta: DocumentExtractionMeta = Field(description="Extraction metadata")
-    classification_level: str = Field(description="Security classification", default="internal")
-    primary_subject: str = Field(description="Primary subject matter")
-    compliance_references: List[str] = Field(description="Compliance references")
-    temporal_relevance: str = Field(description="Time relevance", default="current")
+class RegisterSubDocument(BaseModel):
+    """Subdocument enclosed within a file (document or drawing)."""
+    doc_kind: str = Field(description="'document' or 'drawing'")
+    title: Optional[str] = Field(description="Subdocument title")
+    document_number: Optional[str] = Field(description="Subdocument number if present")
+    revision_code: Optional[str] = Field(description="Subdocument revision code if present")
+    page_range: Optional[str] = Field(description="Page range where it appears, e.g., 3-8")
+    subtype: Optional[str] = Field(description="Subtype if drawing (e.g., general_arrangement, section)")
+    discipline: Optional[str] = Field(description="Discipline if present")
+    additional_fields: Optional[Dict[str, Any]] = Field(default=None, description="Extra register-relevant fields")
 
-class DrawingMetadata(BaseModel):
-    """Metadata for drawing documents"""
-    document_id: str = Field(description="Unique drawing identifier")
+class RegisterDocumentMetadata(BaseModel):
+    """Register-focused metadata for a non-drawing document."""
+    document_id: str = Field(description="Unique source document identifier")
+    document_type: str = Field(description="Always 'document'")
+    document_number: Optional[str] = Field(description="Official document number/reference")
+    revision_code: Optional[str] = Field(description="Revision identifier")
+    title: str = Field(description="Document title")
+    category: Optional[str] = Field(description="Document category (specification, report, contract, etc.)")
+    discipline: Optional[str] = Field(description="Discipline if present")
+    classification_level: str = Field(description="Security classification", default="internal")
+    subdocuments: List[RegisterSubDocument] = Field(default_factory=list, description="Enclosed subdocuments")
+    additional_fields: Optional[Dict[str, Any]] = Field(default=None, description="Extra register-relevant fields")
+    extraction_meta: DocumentExtractionMeta = Field(description="Extraction metadata")
+
+class RegisterDrawingMetadata(BaseModel):
+    """Register-focused metadata for a drawing document."""
+    document_id: str = Field(description="Unique source document identifier")
     document_type: str = Field(description="Always 'drawing'")
-    subtype: str = Field(description="Drawing subtype (general_arrangement, section, elevation, detail)")
+    subtype: Optional[str] = Field(description="Drawing subtype (general_arrangement, section, elevation, detail, plan, schedule, diagram, layout)")
     document_number: Optional[str] = Field(description="Drawing number")
-    revision_code: Optional[str] = Field(description="Revision code")
+    revision_code: Optional[str] = Field(description="Revision identifier")
     title: str = Field(description="Drawing title")
     scale: Optional[str] = Field(description="Drawing scale")
     sheet_number: Optional[str] = Field(description="Sheet number")
     total_sheets: Optional[int] = Field(description="Total number of sheets")
-    discipline: str = Field(description="Engineering discipline")
-    entities: DocumentEntities = Field(description="Key entities shown")
-    locations: List[str] = Field(description="Locations shown on drawing")
-    wbs_refs: List[str] = Field(description="WBS references")
-    lbs_refs: List[str] = Field(description="LBS references")
-    extraction_meta: DocumentExtractionMeta = Field(description="Extraction metadata")
+    discipline: Optional[str] = Field(description="Discipline if present")
     classification_level: str = Field(description="Security classification", default="internal")
+    subdocuments: List[RegisterSubDocument] = Field(default_factory=list, description="Enclosed subdocuments")
+    additional_fields: Optional[Dict[str, Any]] = Field(default=None, description="Extra register-relevant fields")
+    extraction_meta: DocumentExtractionMeta = Field(description="Extraction metadata")
 
 class DocumentMetadataExtraction(BaseModel):
     """Complete extraction result for documents and drawings"""
-    documents: List[DocumentMetadata] = Field(description="Extracted document metadata")
-    drawings: List[DrawingMetadata] = Field(description="Extracted drawing metadata")
+    documents: List[RegisterDocumentMetadata] = Field(description="Extracted document metadata")
+    drawings: List[RegisterDrawingMetadata] = Field(description="Extracted drawing metadata")
     processing_summary: Dict[str, Any] = Field(description="Processing summary")
 
 # State models
@@ -167,7 +88,8 @@ class DocumentMetadataState(BaseModel):
     document_ids: List[str] = []
     drawing_ids: List[str] = []
     txt_project_documents: List[Dict[str, Any]] = []
-    existing_revisions: Dict[str, Dict[str, Any]] = {}  # document_id -> revision_info
+    # Keyed by f"{asset_type}:{document_number}" -> { id, asset_uid, revision_code, current_version, is_current, type }
+    existing_revisions: Dict[str, Dict[str, Any]] = {}
     extracted_metadata: Optional[Dict[str, Any]] = None
     asset_specs: List[Dict[str, Any]] = []
     error: Optional[str] = None
@@ -188,15 +110,49 @@ class OutputState(BaseModel):
 
 # Helper functions
 
-async def check_existing_revisions(state: DocumentMetadataState) -> Dict[str, Dict[str, Any]]:
-    """Check for existing revisions of documents and drawings"""
-    all_ids = state.document_ids + state.drawing_ids
-    if not all_ids:
-        return {}
+## Determination is LLM-only per user rules; no deterministic methods used.
 
-    # Query existing assets to check for revisions
+async def check_existing_revisions(state: DocumentMetadataState) -> Dict[str, Any]:
+    """Check for existing current revisions by document_number and type after extraction.
+
+    This runs AFTER extraction so we know the document_numbers to query.
+    Builds a mapping keyed by f"{type}:{document_number}".
+    """
+    if not state.extracted_metadata:
+        return {"existing_revisions": {}}
+
     from agent.tools.db_fetcher import DbFetcherState
-    fetch_state = DbFetcherState(queries=[{
+
+    extracted = state.extracted_metadata
+    doc_numbers = list({d.get("document_number") for d in extracted.get("documents", []) if d.get("document_number")})
+    drw_numbers = list({d.get("document_number") for d in extracted.get("drawings", []) if d.get("document_number")})
+
+    if not doc_numbers and not drw_numbers:
+        return {"existing_revisions": {}}
+
+    queries = []
+    if doc_numbers:
+        queries.append({
+            "table": "assets",
+            "columns": [
+                "id",
+                "asset_uid",
+                "type",
+                "document_number",
+                "revision_code",
+                "version",
+                "is_current"
+            ],
+            "where": {
+                "project_id": state.project_id,
+                "type": "document",
+                "document_number": {"$in": doc_numbers},
+                "is_current": True,
+                "is_deleted": False
+            }
+        })
+    if drw_numbers:
+        queries.append({
         "table": "assets",
         "columns": [
             "id",
@@ -205,91 +161,45 @@ async def check_existing_revisions(state: DocumentMetadataState) -> Dict[str, Di
             "document_number",
             "revision_code",
             "version",
-            "is_current",
-            "content"
+                "is_current"
         ],
         "where": {
-            "id": {"$in": all_ids},
+                "project_id": state.project_id,
+                "type": "drawing",
+                "document_number": {"$in": drw_numbers},
             "is_current": True,
             "is_deleted": False
         }
-    }])
+        })
 
+    if not queries:
+        return {"existing_revisions": {}}
+
+    fetch_state = DbFetcherState(queries=queries)
     result = db_fetcher_step(fetch_state)
-    existing_revisions = {}
 
+    existing_revisions: Dict[str, Dict[str, Any]] = {}
     for record in result.get("records", []):
-        doc_id = str(record["id"])
-        existing_revisions[doc_id] = {
+        key = f"{record['type']}:{record['document_number']}"
+        existing_revisions[key] = {
+            "current_asset_id": str(record["id"]),
             "asset_uid": str(record["asset_uid"]),
             "document_number": record["document_number"],
             "revision_code": record["revision_code"],
             "current_version": record["version"],
-            "type": record["type"]
+            "is_current": bool(record["is_current"]),
+            "type": record["type"],
         }
 
-    return existing_revisions
-
-def determine_document_type(file_name: str, content: str) -> str:
-    """Determine if document is a drawing or regular document"""
-    file_name_lower = file_name.lower()
-
-    # Check file extension and name patterns for drawings
-    drawing_indicators = [
-        '.dwg', '.dxf', '.pdf',  # Common drawing file extensions
-        'drawing', 'plan', 'section', 'elevation', 'detail',
-        'arrangement', 'layout', 'diagram'
-    ]
-
-    if any(indicator in file_name_lower for indicator in drawing_indicators):
-        return 'drawing'
-
-    # Check content for drawing-related keywords
-    content_lower = content.lower()[:1000]  # Check first 1000 chars
-    drawing_content_indicators = [
-        'drawing', 'scale', 'sheet', 'revision', 'detail',
-        'elevation', 'section', 'plan view', 'north'
-    ]
-
-    if any(indicator in content_lower for indicator in drawing_content_indicators):
-        return 'drawing'
-
-    return 'document'
-
-def determine_drawing_subtype(file_name: str, content: str) -> str:
-    """Determine drawing subtype based on filename and content"""
-    file_name_lower = file_name.lower()
-    content_lower = content.lower()[:2000]
-
-    # Check for specific drawing types
-    if any(term in file_name_lower for term in ['ga', 'general arrangement']):
-        return 'general_arrangement'
-    elif any(term in file_name_lower for term in ['section', 'sect']):
-        return 'section'
-    elif any(term in file_name_lower for term in ['elevation', 'elev']):
-        return 'elevation'
-    elif any(term in file_name_lower for term in ['detail', 'det']):
-        return 'detail'
-
-    # Check content for clues
-    if 'general arrangement' in content_lower:
-        return 'general_arrangement'
-    elif 'section' in content_lower:
-        return 'section'
-    elif 'elevation' in content_lower:
-        return 'elevation'
-    elif 'detail' in content_lower:
-        return 'detail'
-
-    return 'general_arrangement'  # Default
+    return {"existing_revisions": existing_revisions}
 
 # Graph nodes
 
 async def extract_document_metadata_node(state: DocumentMetadataState) -> DocumentMetadataState:
     """Extract metadata from documents and drawings using LLM with structured output"""
     try:
-        documents = []
-        drawings = []
+        documents: List[RegisterDocumentMetadata] = []
+        drawings: List[RegisterDrawingMetadata] = []
 
         # Process each document
         for doc in state.txt_project_documents:
@@ -301,57 +211,77 @@ async def extract_document_metadata_node(state: DocumentMetadataState) -> Docume
                 logger.warning(f"Skipping document {file_name} - no content")
                 continue
 
-            # Determine document type
-            doc_type = determine_document_type(file_name, content)
+            # Classify doc kind using LLM
+            class ClassificationResponse(BaseModel):
+                doc_kind: str
+                subtype: Optional[str] = None
+                discipline: Optional[str] = None
+                reason: str
 
-            # Extract metadata based on type
-            if doc_type == 'drawing':
+            classify_prompt = CLASSIFY_DOCUMENT_PROMPT.format(
+                file_name=file_name,
+                content=content[:5000]
+            )
+            classification_llm = llm.with_structured_output(ClassificationResponse)
+            classification = classification_llm.invoke(classify_prompt)
+            doc_kind = (classification.doc_kind or 'document').lower()
+
+            # Extract metadata based on kind
+            if doc_kind == 'drawing':
                 # Extract drawing metadata
                 drawing_prompt = DOCUMENT_METADATA_DRAWING_PROMPT.format(
                     file_name=file_name,
                     content=content[:10000]  # Limit content for LLM
                 )
-
                 class DrawingExtractionResponse(BaseModel):
                     document_number: Optional[str] = None
                     revision_code: Optional[str] = None
-                    title: str = ""
+                    title: Optional[str] = None
                     scale: Optional[str] = None
                     sheet_number: Optional[str] = None
                     total_sheets: Optional[int] = None
-                    discipline: str = ""
-                    entities: DocumentEntities
-                    locations: List[str] = []
-                    wbs_refs: List[str] = []
-                    lbs_refs: List[str] = []
-                    classification_level: str = "internal"
+                    discipline: Optional[str] = None
+                    subtype: Optional[str] = None
+                    classification_level: Optional[str] = None
+                    subdocuments: List[RegisterSubDocument] = []
+                    additional_fields: Optional[Dict[str, Any]] = None
 
                 structured_llm = llm.with_structured_output(DrawingExtractionResponse)
                 drawing_result = structured_llm.invoke(drawing_prompt)
 
                 # Create drawing metadata
-                drawing_metadata = DrawingMetadata(
+                drawing_metadata = RegisterDrawingMetadata(
                     document_id=doc_id,
                     document_type='drawing',
-                    subtype=determine_drawing_subtype(file_name, content),
+                    subtype=drawing_result.subtype or classification.subtype,
                     document_number=drawing_result.document_number,
                     revision_code=drawing_result.revision_code,
-                    title=drawing_result.title or file_name,
+                    title=(drawing_result.title or file_name),
                     scale=drawing_result.scale,
                     sheet_number=drawing_result.sheet_number,
                     total_sheets=drawing_result.total_sheets,
-                    discipline=drawing_result.discipline,
-                    entities=drawing_result.entities,
-                    locations=drawing_result.locations,
-                    wbs_refs=drawing_result.wbs_refs,
-                    lbs_refs=drawing_result.lbs_refs,
+                    discipline=drawing_result.discipline or classification.discipline,
+                    classification_level=drawing_result.classification_level or 'internal',
+                    subdocuments=drawing_result.subdocuments or [],
+                    additional_fields=drawing_result.additional_fields,
                     extraction_meta=DocumentExtractionMeta(
                         schema_version="v2.2",
-                        quality_checks=["drawing_format_validation", "metadata_extraction"],
+                        quality_checks=["drawing_register_validation", "metadata_extraction"],
                         warnings=[]
                     ),
-                    classification_level=drawing_result.classification_level
                 )
+                # Attach source download info if available
+                try:
+                    if doc.get("blob_url") or doc.get("storage_path"):
+                        extra = drawing_metadata.additional_fields or {}
+                        extra.update({
+                            "source_blob_url": doc.get("blob_url"),
+                            "source_storage_path": doc.get("storage_path"),
+                            "source_file_name": file_name,
+                        })
+                        drawing_metadata.additional_fields = extra
+                except Exception:
+                    pass
                 drawings.append(drawing_metadata)
 
             else:
@@ -360,57 +290,49 @@ async def extract_document_metadata_node(state: DocumentMetadataState) -> Docume
                     file_name=file_name,
                     content=content[:15000]  # Limit content for LLM
                 )
-
                 class DocumentExtractionResponse(BaseModel):
-                    document_type: str = "document"
                     document_number: Optional[str] = None
                     revision_code: Optional[str] = None
-                    summary: DocumentSummary
-                    outline: List[DocumentOutline] = []
-                    entities: DocumentEntities
-                    requirements: List[DocumentRequirement] = []
-                    controls: List[DocumentControl] = []
-                    hazards_risks: List[DocumentHazardRisk] = []
-                    tasks: List[DocumentTask] = []
-                    metrics: List[DocumentMetric] = []
-                    decisions_actions: DocumentDecisionsActions
-                    citations: List[DocumentCitation] = []
-                    anomalies: List[DocumentAnomaly] = []
-                    classification_level: str = "internal"
-                    primary_subject: str = ""
-                    compliance_references: List[str] = []
-                    temporal_relevance: str = "current"
+                    title: Optional[str] = None
+                    category: Optional[str] = None
+                    discipline: Optional[str] = None
+                    classification_level: Optional[str] = None
+                    subdocuments: List[RegisterSubDocument] = []
+                    additional_fields: Optional[Dict[str, Any]] = None
 
                 structured_llm = llm.with_structured_output(DocumentExtractionResponse)
                 doc_result = structured_llm.invoke(document_prompt)
 
                 # Create document metadata
-                document_metadata = DocumentMetadata(
+                document_metadata = RegisterDocumentMetadata(
                     document_id=doc_id,
-                    document_type=doc_result.document_type,
+                    document_type='document',
                     document_number=doc_result.document_number,
                     revision_code=doc_result.revision_code,
-                    summary=doc_result.summary,
-                    outline=doc_result.outline,
-                    entities=doc_result.entities,
-                    requirements=doc_result.requirements,
-                    controls=doc_result.controls,
-                    hazards_risks=doc_result.hazards_risks,
-                    tasks=doc_result.tasks,
-                    metrics=doc_result.metrics,
-                    decisions_actions=doc_result.decisions_actions,
-                    citations=doc_result.citations,
-                    anomalies=doc_result.anomalies,
+                    title=(doc_result.title or file_name),
+                    category=doc_result.category,
+                    discipline=doc_result.discipline or classification.discipline,
+                    classification_level=doc_result.classification_level or 'internal',
+                    subdocuments=doc_result.subdocuments or [],
+                    additional_fields=doc_result.additional_fields,
                     extraction_meta=DocumentExtractionMeta(
                         schema_version="v2.2",
-                        quality_checks=["document_structure_validation", "metadata_completeness"],
+                        quality_checks=["document_register_validation", "metadata_extraction"],
                         warnings=[]
                     ),
-                    classification_level=doc_result.classification_level,
-                    primary_subject=doc_result.primary_subject,
-                    compliance_references=doc_result.compliance_references,
-                    temporal_relevance=doc_result.temporal_relevance
                 )
+                # Attach source download info if available
+                try:
+                    if doc.get("blob_url") or doc.get("storage_path"):
+                        extra = document_metadata.additional_fields or {}
+                        extra.update({
+                            "source_blob_url": doc.get("blob_url"),
+                            "source_storage_path": doc.get("storage_path"),
+                            "source_file_name": file_name,
+                        })
+                        document_metadata.additional_fields = extra
+                except Exception:
+                    pass
                 documents.append(document_metadata)
 
         # Create complete extraction result
@@ -463,7 +385,9 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
     # Process documents
     for doc_metadata in extraction_data.get("documents", []):
         doc_id = doc_metadata["document_id"]
-        existing_revision = state.existing_revisions.get(doc_id, {})
+        doc_number = doc_metadata.get("document_number")
+        key = f"document:{doc_number}" if doc_number else None
+        existing_revision = state.existing_revisions.get(key, {}) if key else {}
 
         # Handle revision logic
         current_version = existing_revision.get("current_version", 0)
@@ -472,14 +396,14 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
         # If this is a new revision, create supersedes relationship
         supersedes_asset_id = None
         if existing_revision and existing_revision.get("is_current"):
-            supersedes_asset_id = existing_revision.get("asset_uid")
+            supersedes_asset_id = existing_revision.get("current_asset_id")
 
         # Create asset spec for document
         asset_spec = {
             "asset": {
                 "type": "document",
-                "subtype": doc_metadata.get("document_type", "document"),
-                "name": f"{doc_metadata.get('document_number', 'Unknown')} - {doc_metadata.get('primary_subject', 'Document')}",
+                "subtype": "document",
+                "name": f"{doc_metadata.get('document_number', 'Unknown')} - {doc_metadata.get('title', 'Document')}",
                 "project_id": state.project_id,
                 "document_number": doc_metadata.get("document_number"),
                 "revision_code": doc_metadata.get("revision_code"),
@@ -491,9 +415,7 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
                     "extraction_method": "llm_structured_output",
                     "extraction_timestamp": datetime.now().isoformat(),
                     "schema_version": "v2.2",
-                    "llm_outputs": {
-                        "document_metadata_extraction": doc_metadata
-                    }
+                    "llm_outputs": {"document_register": doc_metadata}
                 }
             },
             "edges": []
@@ -504,11 +426,11 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
             asset_spec["asset"]["supersedes_asset_id"] = supersedes_asset_id
             asset_spec["asset"]["version"] = new_version
             asset_spec["edges"].append({
-                "from_asset_id": f"{{new_asset_id}}",  # Placeholder for new asset ID
+                "from_asset_id": "",
                 "to_asset_id": supersedes_asset_id,
                 "edge_type": "SUPERSEDES",
                 "properties": {"superseded_at": datetime.now().isoformat()},
-                "idempotency_key": f"supersedes:{state.project_id}:{doc_id}:v{new_version}"
+                "idempotency_key": f"supersedes:{state.project_id}:{doc_number or doc_id}:v{new_version}"
             })
 
         asset_specs.append(asset_spec)
@@ -516,7 +438,9 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
     # Process drawings
     for drawing_metadata in extraction_data.get("drawings", []):
         drawing_id = drawing_metadata["document_id"]
-        existing_revision = state.existing_revisions.get(drawing_id, {})
+        drw_number = drawing_metadata.get("document_number")
+        key = f"drawing:{drw_number}" if drw_number else None
+        existing_revision = state.existing_revisions.get(key, {}) if key else {}
 
         # Handle revision logic (same as documents)
         current_version = existing_revision.get("current_version", 0)
@@ -524,7 +448,7 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
 
         supersedes_asset_id = None
         if existing_revision and existing_revision.get("is_current"):
-            supersedes_asset_id = existing_revision.get("asset_uid")
+            supersedes_asset_id = existing_revision.get("current_asset_id")
 
         # Create asset spec for drawing
         asset_spec = {
@@ -543,9 +467,7 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
                     "extraction_method": "llm_structured_output",
                     "extraction_timestamp": datetime.now().isoformat(),
                     "schema_version": "v2.2",
-                    "llm_outputs": {
-                        "drawing_metadata_extraction": drawing_metadata
-                    }
+                    "llm_outputs": {"drawing_register": drawing_metadata}
                 }
             },
             "edges": []
@@ -556,11 +478,11 @@ def create_asset_specifications_node(state: DocumentMetadataState) -> DocumentMe
             asset_spec["asset"]["supersedes_asset_id"] = supersedes_asset_id
             asset_spec["asset"]["version"] = new_version
             asset_spec["edges"].append({
-                "from_asset_id": "{new_asset_id}",  # Placeholder for new asset ID
+                "from_asset_id": "",
                 "to_asset_id": supersedes_asset_id,
                 "edge_type": "SUPERSEDES",
                 "properties": {"superseded_at": datetime.now().isoformat()},
-                "idempotency_key": f"supersedes:{state.project_id}:{drawing_id}:v{new_version}"
+                "idempotency_key": f"supersedes:{state.project_id}:{drw_number or drawing_id}:v{new_version}"
             })
 
         asset_specs.append(asset_spec)
@@ -653,15 +575,15 @@ def create_document_metadata_graph():
     workflow = StateGraph(DocumentMetadataState, input=InputState, output=OutputState)
 
     # Add nodes
-    workflow.add_node("check_revisions", check_existing_revisions)
     workflow.add_node("extract_metadata", extract_document_metadata_node)
+    workflow.add_node("check_revisions", check_existing_revisions)
     workflow.add_node("create_asset_specs", create_asset_specifications_node)
     workflow.add_node("persist_assets", persist_assets_node)
 
     # Define flow
-    workflow.add_edge(START, "check_revisions")
-    workflow.add_edge("check_revisions", "extract_metadata")
-    workflow.add_edge("extract_metadata", "create_asset_specs")
+    workflow.add_edge(START, "extract_metadata")
+    workflow.add_edge("extract_metadata", "check_revisions")
+    workflow.add_edge("check_revisions", "create_asset_specs")
     workflow.add_edge("create_asset_specs", "persist_assets")
     workflow.add_edge("persist_assets", END)
 

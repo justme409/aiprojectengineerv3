@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const projectId = searchParams.get('projectId')
     const type = searchParams.get('type')
+    const documentNumber = searchParams.get('documentNumber')
     const limit = parseInt(searchParams.get('limit') || '50')
     const offset = parseInt(searchParams.get('offset') || '0')
 
@@ -35,6 +36,12 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
+    if (documentNumber) {
+      query += ` AND a.document_number = $${paramIndex}`
+      params.push(documentNumber)
+      paramIndex++
+    }
+
     // Check user has access to project/organization
     if (projectId) {
       const accessCheck = await pool.query(`
@@ -48,7 +55,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    query += ` ORDER BY a.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
+    query += ` ORDER BY a.document_number NULLS LAST, a.version DESC, a.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`
     params.push(limit, offset)
 
     const result = await pool.query(query, params)

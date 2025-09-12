@@ -4,16 +4,26 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Badge } from '@/components/ui/badge'
+import { MoreHorizontal, Download, Trash2, Eye, EyeOff } from 'lucide-react'
 
 interface Document {
   id: string
+  document_name: string
   file_name: string
-  content_type: string
-  size: number
-  created_at: string
-  processing_status: string
+  source_document_id?: string
   document_number?: string
   revision_code?: string
+  extracted_content?: string
+  blob_url?: string
+  storage_path?: string
+  metadata: any
+  status: string
+  created_at: string
+  updated_at: string
+  type: string
+  processing_status: string
 }
 
 interface DocumentListProps {
@@ -23,6 +33,8 @@ interface DocumentListProps {
 export default function DocumentList({ projectId }: DocumentListProps) {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+  const [showAllRevisions, setShowAllRevisions] = useState(false)
+  const [expandedDocumentNumbers, setExpandedDocumentNumbers] = useState<Set<string>>(new Set())
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -41,6 +53,44 @@ export default function DocumentList({ projectId }: DocumentListProps) {
   useEffect(() => {
     fetchDocuments()
   }, [fetchDocuments])
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!confirm('Are you sure you want to delete this document?')) return
+
+    try {
+      const response = await fetch(`/api/v1/documents?id=${documentId}&projectId=${projectId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        await fetchDocuments() // Refresh the list
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to delete document: ${errorData.error || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error)
+      alert('Failed to delete document')
+    }
+  }
+
+  const handleDownloadDocument = async (document: Document) => {
+    if (document.blob_url) {
+      window.open(document.blob_url, '_blank')
+    } else {
+      alert('Download URL not available')
+    }
+  }
+
+  const toggleRevisionView = (documentNumber: string) => {
+    const newExpanded = new Set(expandedDocumentNumbers)
+    if (newExpanded.has(documentNumber)) {
+      newExpanded.delete(documentNumber)
+    } else {
+      newExpanded.add(documentNumber)
+    }
+    setExpandedDocumentNumbers(newExpanded)
+  }
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -109,39 +159,82 @@ export default function DocumentList({ projectId }: DocumentListProps) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Document Name</TableHead>
                   <TableHead>File Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Size</TableHead>
                   <TableHead>Document Number</TableHead>
+                  <TableHead>Revision</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Uploaded</TableHead>
+                  <TableHead>Processed</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {documents.map((doc) => (
                   <TableRow key={doc.id}>
-                    <TableCell className="font-medium">{doc.file_name}</TableCell>
-                    <TableCell>{doc.content_type}</TableCell>
-                    <TableCell>{formatFileSize(doc.size)}</TableCell>
-                    <TableCell>
-                      {doc.document_number ? `${doc.document_number}${doc.revision_code ? `-${doc.revision_code}` : ''}` : '-'}
+                    <TableCell className="font-medium">
+                      {doc.document_name || 'Processing...'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {doc.file_name}
                     </TableCell>
                     <TableCell>
-                      <span className={`capitalize ${getStatusColor(doc.processing_status)}`}>
+                      {doc.document_number ? (
+                        <Badge variant="outline">{doc.document_number}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {doc.revision_code ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => doc.document_number && toggleRevisionView(doc.document_number)}
+                        >
+                          {doc.revision_code}
+                          {doc.document_number && expandedDocumentNumbers.has(doc.document_number) ? (
+                            <EyeOff className="ml-1 h-3 w-3" />
+                          ) : (
+                            <Eye className="ml-1 h-3 w-3" />
+                          )}
+                        </Button>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={doc.processing_status === 'processed' ? 'default' : 'secondary'}
+                        className={getStatusColor(doc.processing_status)}
+                      >
                         {doc.processing_status}
-                      </span>
+                      </Badge>
                     </TableCell>
-                    <TableCell>{new Date(doc.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {new Date(doc.updated_at || doc.created_at).toLocaleDateString()}
+                    </TableCell>
                     <TableCell>
-                      <div className="flex space-x-2">
-                        <Button variant="outline" size="sm">
-                          View
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          Download
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleDownloadDocument(doc)}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
