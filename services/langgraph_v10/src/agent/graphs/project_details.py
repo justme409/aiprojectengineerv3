@@ -230,3 +230,8 @@ def create_project_details_extraction_graph():
     graph.add_edge("extract_details", "create_asset")
 
     return graph.compile()
+
+# Backwards-compatible factory expected by orchestrator
+def create_project_details_graph():
+    """Alias to maintain compatibility with orchestrator imports."""
+    return create_project_details_extraction_graph()

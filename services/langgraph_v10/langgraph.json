@@ -13,7 +13,7 @@
     "rmp_validator": "./src/agent/graphs/rmp_validator.py:create_rmp_validator_graph",
     "itp_completeness_checker": "./src/agent/graphs/itp_completeness_checker.py:create_itp_completeness_checker_graph",
     "lbs_extraction": "./src/agent/graphs/lbs_extraction.py:create_lbs_extraction_graph",
-    "plan_generation": "./src/agent/graphs/plan_generation.py:create_plan_generation_graph",
+    "plan_generation": "./src/agent/graphs/plan_generation_agent.py:create_plan_generation_graph",
     "project_details": "./src/agent/graphs/project_details.py:create_project_details_graph",
     "template_variant_selector": "./src/agent/graphs/template_variant_selector.py:create_template_variant_selector_graph",
     "jurisdiction_resolver": "./src/agent/graphs/jurisdiction_resolver.py:create_jurisdiction_resolver_graph",

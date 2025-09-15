@@ -8,7 +8,7 @@ from langgraph.graph import StateGraph, START, END
 # Import v10 subgraph factories
 from agent.graphs.document_extraction import create_document_extraction_graph
 from agent.graphs.project_details import create_project_details_graph
-from agent.graphs.plan_generation import create_plan_generation_graph
+from agent.graphs.plan_generation_agent import create_plan_generation_graph
 from agent.graphs.document_metadata import create_document_metadata_graph
 from agent.graphs.wbs_extraction import create_wbs_extraction_graph
 from agent.graphs.lbs_extraction import create_lbs_extraction_graph

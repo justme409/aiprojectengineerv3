@@ -47,3 +47,4 @@ export default function QseDocViewer({ docId }: Props) {
   // Parent container applies prose styles; add scoped class for table/spacing styles
   return <div className="qse-document" dangerouslySetInnerHTML={{ __html: html }} />
 }
+

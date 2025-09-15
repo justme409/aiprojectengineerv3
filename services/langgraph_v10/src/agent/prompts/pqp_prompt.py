@@ -51,161 +51,118 @@ Use the most relevant jurisdictional template below (QLD, SA, VIC, NSW). If none
   ]
 }
 
---- TEMPLATE: SA (DIT Master Specifications) ---
+--- TEMPLATE: SA (PC-QA2 – Quality Management Requirements for Major Projects) ---
 {
-  "title": "South Australia Project Quality Plan (PQP) — Layout (DIT Master Specs)",
-  "revision": "Current",
+  "title": "South Australia Project Quality Plan (PQP) — Layout (PC-QA2)",
+  "revision": "September 2024",
   "metadata": {
     "jurisdiction": "SA",
-    "agency": "Department of Infrastructure and Transport",
-    "source_document": "DIT Master Specifications",
+    "agency": "Department for Infrastructure and Transport",
+    "source_document": "Master Specification PC-QA2 Quality Management Requirements for Major Projects",
     "standards": "AS/NZS ISO 9001"
   },
   "sections": [
-    { "id": "introduction", "title": "Introduction" },
-    { "id": "scope", "title": "Scope and Objectives" },
-    { "id": "definitions", "title": "Definitions" },
-    { "id": "references", "title": "References and Standards" },
+    { "id": "general", "title": "General" },
     {
-      "id": "management-system",
-      "title": "Quality Management System",
+      "id": "documentation",
+      "title": "Documentation",
       "children": [
-        { "id": "policies-procedures", "title": "Policies and Procedures" },
-        { "id": "roles-responsibilities", "title": "Roles and Responsibilities" },
-        { "id": "training-competency", "title": "Training and Competency" },
-        { "id": "communication", "title": "Communication" }
+        { "id": "pqp", "title": "Project Quality Plan (content; organisation; policy; team)" },
+        { "id": "as-built", "title": "As-Built Records (digital engineering; registers; QA records)" }
       ]
     },
-    {
-      "id": "project-controls",
-      "title": "Project Quality Controls",
-      "children": [
-        { "id": "inspection-testing", "title": "Inspection and Testing Plans" },
-        { "id": "nonconformance", "title": "Nonconformance Management" },
-        { "id": "records", "title": "Quality Records" },
-        { "id": "audits", "title": "Quality Audits" }
-      ]
-    }
+    { "id": "qms", "title": "Quality Management System (ISO 9001; accessibility; electronic)" },
+    { "id": "management-responsibility", "title": "Management Responsibility and Authority (Construction Quality Representative)" },
+    { "id": "resource-management", "title": "Resource Management (competency; calibration; equipment)" },
+    { "id": "product-realisation", "title": "Product Realisation (procurement; subcontracting; design involvement)" },
+    { "id": "work-lots", "title": "Work Lots and Traceability (lot registers; validation)" },
+    { "id": "inspection-testing", "title": "Inspection and Testing (ITPs; schedules; competency)" },
+    { "id": "nonconformance", "title": "Non-Conformance and System Non-Conformance (registers)" },
+    { "id": "audits-surveillance", "title": "Auditing, Surveillance and Notices (Principal, IDC, CV involvement)" },
+    { "id": "performance-eval", "title": "Performance Evaluation and Improvement (CAPA register)" },
+    { "id": "hold-witness", "title": "Hold Points and Witness Points (register; durations; delegation)" }
   ]
 }
 
---- TEMPLATE: VIC (Section 168 – Quality Management) ---
+--- TEMPLATE: VIC (Section 160 – Construction General, Part A Management Systems) ---
 {
-  "title": "Victoria Project Quality Plan (PQP) — Layout (Section 168)",
-  "revision": "Current",
+  "title": "Victoria Project Quality Plan (PQP) — Layout (Section 160 Part A)",
+  "revision": "November 2018",
   "metadata": {
     "jurisdiction": "VIC",
-    "agency": "Department of Transport",
-    "source_document": "Section 168 Quality Management",
-    "standards": "AS/NZS ISO 9001"
+    "agency": "Department of Transport (Vic)",
+    "source_document": "Section 160 Construction General (Part A Management Systems)",
+    "standards": "AS/NZS ISO 9001; AS/NZS ISO 14001; AS/NZS 4801/ISO 45001"
   },
   "sections": [
-    { "id": "introduction", "title": "Introduction" },
-    { "id": "scope", "title": "Scope" },
-    { "id": "definitions", "title": "Definitions" },
-    { "id": "references", "title": "References" },
+    { "id": "qms-standards", "title": "Quality Management System Standards and Definitions" },
+    { "id": "qmr", "title": "Quality Management Representative" },
     {
-      "id": "quality-system",
-      "title": "Quality System Requirements",
+      "id": "quality-plans",
+      "title": "Quality Plans and Procedures",
       "children": [
-        { "id": "management-commitment", "title": "Management Commitment" },
-        { "id": "quality-policy", "title": "Quality Policy" },
-        { "id": "planning", "title": "Planning" },
-        { "id": "responsibility-authority", "title": "Responsibility and Authority" }
-      ]
-    },
-    {
-      "id": "implementation",
-      "title": "Implementation",
-      "children": [
-        { "id": "resources", "title": "Provision of Resources" },
-        { "id": "personnel", "title": "Personnel" },
-        { "id": "work-environment", "title": "Work Environment" },
-        { "id": "contract-review", "title": "Contract Review" }
-      ]
-    },
-    {
-      "id": "control-verification",
-      "title": "Control and Verification",
-      "children": [
-        { "id": "design-control", "title": "Design Control" },
-        { "id": "procurement", "title": "Procurement" },
-        { "id": "product-identification", "title": "Product Identification and Traceability" },
-        { "id": "inspection-testing", "title": "Inspection and Testing" }
+        { "id": "incident", "title": "Incident Management and Reporting (cross-ref Sections 168 & 176)" },
+        { "id": "mgmt-system-plans", "title": "Management System Plans: TMP, EMP, HS Coordination Plan" },
+        { "id": "hold-points", "title": "Nominated Hold Points" },
+        { "id": "records", "title": "Records (format; indexing; media requirements)" },
+        { "id": "surveillance-audits", "title": "Surveillance and Audits by the Superintendent" }
       ]
     }
   ]
 }
 
---- TEMPLATE: NSW (RMS Quality Management) ---
+--- TEMPLATE: NSW (TfNSW Q6 – Quality Management Major Works) ---
 {
-  "title": "NSW Project Quality Plan (PQP) — Layout (RMS Quality Management)",
-  "revision": "Current",
+  "title": "New South Wales Project Quality Plan (PQP) — Layout (TfNSW Q6)",
+  "revision": "February 2024",
   "metadata": {
     "jurisdiction": "NSW",
-    "agency": "Roads and Maritime Services",
-    "source_document": "RMS Quality Management Guidelines",
-    "standards": "AS/NZS ISO 9001"
+    "agency": "Transport for NSW",
+    "source_document": "QA Specification Q6 Quality Management (Major Works)",
+    "standards": "AS/NZS ISO 9001; AS ISO 10005; AS/NZS ISO 10013"
   },
   "sections": [
-    { "id": "introduction", "title": "Introduction" },
-    { "id": "scope-objectives", "title": "Scope and Objectives" },
-    { "id": "definitions", "title": "Definitions" },
-    { "id": "references", "title": "References" },
-    {
-      "id": "quality-management-system",
-      "title": "Quality Management System",
-      "children": [
-        { "id": "policy", "title": "Quality Policy" },
-        { "id": "planning", "title": "Quality Planning" },
-        { "id": "implementation", "title": "Implementation and Operation" },
-        { "id": "measurement-analysis", "title": "Measurement, Analysis and Improvement" }
-      ]
-    },
+    { "id": "scope", "title": "General and Scope" },
+    { "id": "quality-manual", "title": "Quality Manual (structure; mapping to ISO 9001)" },
     {
       "id": "project-quality-plan",
       "title": "Project Quality Plan",
       "children": [
-        { "id": "organizational-structure", "title": "Organizational Structure and Responsibilities" },
-        { "id": "procedures", "title": "Procedures and Work Instructions" },
-        { "id": "inspection-test-plans", "title": "Inspection and Test Plans" },
-        { "id": "quality-records", "title": "Quality Records" }
+        { "id": "staging", "title": "Stage Submissions (coverage of activities)" },
+        { "id": "pqr", "title": "Project Quality Representative (authority; availability)" },
+        { "id": "competence", "title": "Competence and Awareness (induction and training)" },
+        { "id": "design-dev", "title": "Design and Development (design plans; verification)" },
+        { "id": "process-control", "title": "Work Process Controls (validation; responsibilities; records)" },
+        { "id": "itps", "title": "Inspection and Test Plans (lot definition; sampling; testing)" },
+        { "id": "procurement", "title": "Procurement and Supplier Control" },
+        { "id": "meas-equip", "title": "Monitoring and Measuring Equipment (calibration; NATA)" }
       ]
     }
   ]
 }
 
---- TEMPLATE: Generic ---
+--- TEMPLATE: GENERIC (Consolidated Quality) ---
 {
-  "title": "Project Quality Plan (PQP)",
-  "revision": "1.0",
+  "title": "Generic Project Quality Plan — Consolidated Layout",
   "metadata": {
     "jurisdiction": "Generic",
-    "standards": "AS/NZS ISO 9001:2016"
+    "source_basis": "QLD MRTS50; SA PC-QA2; VIC Section 160; NSW TfNSW Q6",
+    "standards": "AS/NZS ISO 9001; AS ISO 10005; AS/NZS ISO 10013"
   },
   "sections": [
-    { "id": "introduction", "title": "Introduction" },
-    { "id": "scope", "title": "Scope and Objectives" },
-    { "id": "definitions", "title": "Definitions" },
-    { "id": "references", "title": "References and Standards" },
+    { "id": "intro", "title": "Introduction and Referenced Documents" },
+    { "id": "qms", "title": "Quality Management System (ISO 9001)" },
     {
-      "id": "management-system",
-      "title": "Quality Management System",
+      "id": "pqp",
+      "title": "Project Quality Plan",
       "children": [
-        { "id": "policies-procedures", "title": "Policies and Procedures" },
-        { "id": "roles-responsibilities", "title": "Roles and Responsibilities" },
-        { "id": "training-competency", "title": "Training and Competency" },
-        { "id": "communication", "title": "Communication" }
-      ]
-    },
-    {
-      "id": "project-controls",
-      "title": "Project Quality Controls",
-      "children": [
-        { "id": "inspection-testing", "title": "Inspection and Testing Plans" },
-        { "id": "nonconformance", "title": "Nonconformance Management" },
-        { "id": "records", "title": "Quality Records" },
-        { "id": "audits", "title": "Quality Audits" }
+        { "id": "objectives", "title": "Objectives and Policy" },
+        { "id": "roles", "title": "Roles and Responsibilities (PQR; org chart)" },
+        { "id": "design-procurement", "title": "Design, Procurement and Subcontractor Control" },
+        { "id": "itps", "title": "ITPs; Sampling and Testing; Lot Control" },
+        { "id": "hold-witness", "title": "Hold/Witness Points and Milestones" },
+        { "id": "nonconformance", "title": "Nonconformance and Corrective Actions" },
+        { "id": "records", "title": "Records Management and Retention" }
       ]
     }
   ]

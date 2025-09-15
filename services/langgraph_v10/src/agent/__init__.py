@@ -3,6 +3,5 @@
 This module defines a custom graph.
 """
 
-from .graph import graph
-
-__all__ = ["graph"]
+# Removed circular import - let LangGraph import graph.py directly
+__all__ = []
