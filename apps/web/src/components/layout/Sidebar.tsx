@@ -5,7 +5,7 @@ import { usePathname, useParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, FolderOpen } from "lucide-react"
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, FolderOpen, FileText, Map, Mail, Settings } from "lucide-react"
 import { useAuth } from "@/lib/hooks/use-auth"
 
 interface Project {
@@ -41,6 +41,8 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [collapsed, setCollapsed] = useState(false)
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null)
+  const [expandedSectionsByProject, setExpandedSectionsByProject] = useState<Record<string, Record<string, boolean>>>({})
 
   // Fetch projects on mount
   useEffect(() => {
@@ -113,6 +115,100 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
     return pathname?.includes(`/projects/${projectId}`)
   }
 
+  type SectionLink = { label: string; href: string; icon?: React.ComponentType<any> }
+  type Section = { id: string; title: string; links: SectionLink[] }
+
+  const getSectionsForProject = (projectId: string, jurisdiction?: string): Section[] => {
+    const showPrimaryTesting = (jurisdiction || '').toUpperCase() === 'NSW'
+    const sections: Section[] = [
+      {
+        id: 'project-controls',
+        title: 'Project Controls',
+        links: [
+          { label: 'Management Plans', href: `/projects/${projectId}/plans`, icon: FileText },
+          { label: 'Schedule & WBS', href: `/projects/${projectId}/wbs`, icon: FileText },
+        ],
+      },
+      {
+        id: 'documents',
+        title: 'Documents',
+        links: [
+          { label: 'Documents', href: `/projects/${projectId}/documents`, icon: FileText },
+        ],
+      },
+      {
+        id: 'quality',
+        title: 'Quality',
+        links: [
+          { label: 'ITP Templates', href: `/projects/${projectId}/quality/itp-templates`, icon: FileText },
+          { label: 'ITP Register', href: `/projects/${projectId}/quality/itp-register`, icon: FileText },
+          { label: 'Inspections', href: `/projects/${projectId}/inspections`, icon: FileText },
+          { label: 'Materials', href: `/projects/${projectId}/materials`, icon: FileText },
+          { label: 'Tests', href: `/projects/${projectId}/tests`, icon: FileText },
+          ...(showPrimaryTesting ? [{ label: 'Primary Testing (NSW)', href: `/projects/${projectId}/quality/primary-testing`, icon: FileText } as SectionLink] : []),
+        ],
+      },
+      {
+        id: 'hse',
+        title: 'Health, Safety & Environment',
+        links: [
+          { label: 'SWMS', href: `/projects/${projectId}/hse/swms`, icon: FileText },
+          { label: 'Permits', href: `/projects/${projectId}/hse/permits`, icon: FileText },
+          { label: 'Toolbox Talks', href: `/projects/${projectId}/hse/toolbox-talks`, icon: FileText },
+          { label: 'Safety Walks', href: `/projects/${projectId}/hse/safety-walks`, icon: FileText },
+          { label: 'Inductions', href: `/projects/${projectId}/hse/inductions`, icon: FileText },
+          { label: 'Incidents', href: `/projects/${projectId}/hse/incidents`, icon: FileText },
+        ],
+      },
+      {
+        id: 'site',
+        title: 'Site',
+        links: [
+          { label: 'Daily Diaries', href: `/projects/${projectId}/field/daily-diaries`, icon: FileText },
+          { label: 'Site Instructions', href: `/projects/${projectId}/field/site-instructions`, icon: FileText },
+          { label: 'Photos', href: `/projects/${projectId}/field/photos`, icon: FileText },
+        ],
+      },
+      {
+        id: 'approvals',
+        title: 'Approvals & Communication',
+        links: [
+          { label: 'Approvals Designer', href: `/projects/${projectId}/approvals/designer`, icon: FileText },
+          { label: 'Approvals Inbox', href: `/projects/${projectId}/approvals/inbox`, icon: Mail },
+          { label: 'Project Inbox', href: `/projects/${projectId}/inbox`, icon: Mail },
+        ],
+      },
+      {
+        id: 'tools',
+        title: 'Tools & Analytics',
+        links: [
+          { label: 'Map View', href: `/projects/${projectId}/map`, icon: Map },
+          { label: 'Reports', href: `/projects/${projectId}/reports`, icon: FileText },
+          { label: 'Settings', href: `/projects/${projectId}/settings`, icon: Settings },
+        ],
+      },
+    ]
+
+    return sections
+  }
+
+  const isSectionExpanded = (projectId: string, sectionId: string) => {
+    return !!expandedSectionsByProject[projectId]?.[sectionId]
+  }
+
+  const toggleSection = (projectId: string, sectionId: string) => {
+    setExpandedSectionsByProject(prev => {
+      const projectSections = prev[projectId] || {}
+      return {
+        ...prev,
+        [projectId]: {
+          ...projectSections,
+          [sectionId]: !projectSections[sectionId]
+        }
+      }
+    })
+  }
+
   if (loading) {
     return (
       <div
@@ -177,27 +273,95 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
               const displayName = project.displayName || project.name || `Project ${project.id.slice(0, 8)}`
               const abbrev = getUniqueAbbrev(displayName, projects)
               const active = isActive(project.id)
+              const jurisdiction = (project.projectAsset as any)?.content?.jurisdiction as string | undefined
+              const isExpanded = expandedProjectId === project.id
 
               return (
                 <div key={project.id}>
                   {!collapsed ? (
-                    <Link
-                      href={`/projects/${project.id}/overview`}
-                      title={displayName}
+                    <div
                       className={cn(
-                        "flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer rounded",
+                        "p-1 rounded",
                         active ? "bg-accent border-r-2 border-primary" : ""
                       )}
                     >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="flex items-center justify-center w-6 h-6 bg-gray-100 rounded text-xs font-medium text-gray-700 flex-shrink-0">
-                          <FolderOpen className="h-3 w-3" />
-                        </div>
-                        <span className="text-sm font-medium truncate text-gray-700">
-                          {displayName}
-                        </span>
+                      <div className="flex items-center">
+                        <Link
+                          href={`/projects/${project.id}/overview`}
+                          title={displayName}
+                          className={cn(
+                            "flex items-center gap-2 flex-1 min-w-0 p-1 hover:bg-gray-100 rounded",
+                          )}
+                        >
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div className="flex items-center justify-center w-6 h-6 bg-gray-100 rounded text-xs font-medium text-gray-700 flex-shrink-0">
+                              <FolderOpen className="h-3 w-3" />
+                            </div>
+                            <span className="text-sm font-medium truncate text-gray-700">
+                              {displayName}
+                            </span>
+                          </div>
+                        </Link>
+                        <button
+                          className="h-7 w-7 grid place-items-center rounded hover:bg-gray-100"
+                          aria-label={isExpanded ? "Collapse project" : "Expand project"}
+                          title={isExpanded ? "Collapse" : "Expand"}
+                          onClick={() => setExpandedProjectId(prev => prev === project.id ? null : project.id)}
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-gray-700" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-gray-700" />
+                          )}
+                        </button>
                       </div>
-                    </Link>
+
+                      {isExpanded && (
+                        <div className="mt-1 pl-2">
+                          {getSectionsForProject(project.id, jurisdiction).map(section => {
+                            const sectionOpen = isSectionExpanded(project.id, section.id)
+                            return (
+                              <div key={section.id} className="mb-1">
+                                <button
+                                  className="w-full flex items-center justify-between text-left text-sm font-semibold text-gray-700 px-2 py-1 rounded hover:bg-gray-100"
+                                  onClick={() => toggleSection(project.id, section.id)}
+                                  aria-expanded={sectionOpen}
+                                >
+                                  <span className="truncate">{section.title}</span>
+                                  {sectionOpen ? (
+                                    <ChevronUp className="h-3 w-3 text-gray-600" />
+                                  ) : (
+                                    <ChevronDown className="h-3 w-3 text-gray-600" />
+                                  )}
+                                </button>
+                                {sectionOpen && (
+                                  <div className="mt-1 space-y-0.5">
+                                    {section.links.map(link => {
+                                      const selected = pathname?.startsWith(link.href)
+                                      const Icon = link.icon
+                                      return (
+                                        <Link key={link.href} href={link.href}>
+                                          <Button
+                                            variant="ghost"
+                                            className={cn(
+                                              "w-full justify-start h-8 text-xs px-2",
+                                              selected ? "bg-gray-100" : ""
+                                            )}
+                                          >
+                                            {Icon ? <Icon className="mr-2 h-3 w-3" /> : null}
+                                            {link.label}
+                                          </Button>
+                                        </Link>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <Link href={`/projects/${project.id}/overview`}>
                       <Button

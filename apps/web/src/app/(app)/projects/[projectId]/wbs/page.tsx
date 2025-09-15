@@ -1,5 +1,6 @@
 import React from 'react'
 import WbsTreeView from '@/components/features/wbs/WbsTreeView'
+import LbsView from '@/components/features/lbs/LbsView'
 import { WbsItem } from '@/types/graph'
 
 type ProjectWbsPageProps = {
@@ -15,7 +16,8 @@ export default async function ProjectWbsPage({
 
   try {
     // First try to get WBS assets directly
-    const assetsResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/assets?projectId=${projectId}&type=wbs_node`, {
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000'
+    const assetsResponse = await fetch(`${baseUrl}/api/v1/assets?projectId=${projectId}&type=wbs_node`, {
       cache: 'no-store' // Ensure fresh data
     })
 
@@ -36,9 +38,46 @@ export default async function ProjectWbsPage({
       }
     }
 
-    // If no assets found, try the legacy API endpoint
+    // If no WBS node assets found, try WBS plan assets
     if (!wbsTreeData) {
-      const legacyResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/v1/projects/${projectId}/plans?type=wbs`, {
+      const planResponse = await fetch(`${baseUrl}/api/v1/assets?projectId=${projectId}&type=plan&subtype=wbs`, {
+        cache: 'no-store'
+      })
+
+      if (planResponse.ok) {
+        const planData = await planResponse.json()
+        const wbsPlans = planData.assets || []
+
+        if (wbsPlans.length > 0) {
+          // Extract WBS nodes from plan content
+          const plan = wbsPlans[0]
+          const wbsNodes = plan.content?.nodes || []
+
+          if (wbsNodes.length > 0) {
+            // Transform plan WBS nodes to WbsItem format
+            wbsTreeData = wbsNodes.map((node: any) => ({
+              id: node.id,
+              name: node.name,
+              parentId: node.parentId,
+              node_type: node.node_type || 'activity',
+              path_key: node.path_key,
+              content: {
+                reasoning: node.reasoning,
+                description: node.description,
+                itp_required: node.itp_required,
+                itp_reasoning: node.itp_reasoning,
+                source_reference_uuids: node.source_reference_uuids,
+                source_reference_hints: node.source_reference_hints
+              }
+            }))
+          }
+        }
+      }
+    }
+
+    // If still no data, try the legacy API endpoint
+    if (!wbsTreeData) {
+      const legacyResponse = await fetch(`${baseUrl}/api/v1/projects/${projectId}/plans?type=wbs`, {
         cache: 'no-store'
       })
 
@@ -53,14 +92,21 @@ export default async function ProjectWbsPage({
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold mb-4">Work Breakdown Structure</h1>
+    <div className="space-y-10">
+      <div>
+        <h1 className="text-2xl font-semibold mb-4">Schedule & Work Breakdown Structure</h1>
+        <WbsTreeView
+          projectId={projectId}
+          initialWbsData={wbsTreeData}
+          projectName="Project"
+        />
+      </div>
 
-      <WbsTreeView
-        projectId={projectId}
-        initialWbsData={wbsTreeData}
-        projectName="Project"
-      />
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Location Breakdown Structure</h2>
+        {/* Merge LBS into this page as a subsection */}
+        <LbsView projectId={projectId} />
+      </div>
     </div>
   )
 }

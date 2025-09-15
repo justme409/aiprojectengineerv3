@@ -39,7 +39,7 @@ export default function TermsPage() {
             <h2 className="text-2xl font-bold mb-4 text-slate-900">Acceptable Use</h2>
             <ul className="text-slate-600 list-disc pl-6 space-y-2">
               <li>Do not misuse the service or attempt to access it using a method other than the interface provided.</li>
-              <li>Do not infringe on others' rights or upload unlawful content.</li>
+              <li>Do not infringe on others&apos; rights or upload unlawful content.</li>
             </ul>
           </section>
 

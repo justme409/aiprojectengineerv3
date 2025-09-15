@@ -6,21 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   FileText,
-  FolderOpen,
   Map,
-  CheckSquare,
-  Truck,
-  TestTube,
-  HardHat,
-  Wrench,
-  FileCheck,
   Mail,
-  BarChart3,
   Settings,
-  Shield,
-  ChevronRight,
-  Home,
-  Users
+  ChevronRight
 } from 'lucide-react'
 
 interface PageProps {
@@ -85,14 +74,35 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 			{/* Main Navigation Sections */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
-				{/* Core Project Sections */}
+				{/* Project Controls */}
 				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center">
-							<FolderOpen className="mr-2 h-5 w-5" />
-							Core Project
-						</CardTitle>
-						<CardDescription>Main project management areas</CardDescription>
+						<CardTitle>Project Controls</CardTitle>
+						<CardDescription>Plans, schedule, and structure</CardDescription>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						<Link href={`/projects/${projectId}/plans`}>
+							<Button variant="ghost" className="w-full justify-start">
+								<FileText className="mr-2 h-4 w-4" />
+								Management Plans
+								<ChevronRight className="ml-auto h-4 w-4" />
+							</Button>
+						</Link>
+						<Link href={`/projects/${projectId}/wbs`}>
+							<Button variant="ghost" className="w-full justify-start">
+								<FileText className="mr-2 h-4 w-4" />
+								Schedule & WBS
+								<ChevronRight className="ml-auto h-4 w-4" />
+							</Button>
+						</Link>
+					</CardContent>
+				</Card>
+
+				{/* Documents (only item left from original core) */}
+				<Card>
+					<CardHeader>
+						<CardTitle>Documents</CardTitle>
+						<CardDescription>All project documentation</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-3">
 						<Link href={`/projects/${projectId}/documents`}>
@@ -102,51 +112,13 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
-						<Link href={`/projects/${projectId}/wbs`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<FolderOpen className="mr-2 h-4 w-4" />
-								Work Breakdown Structure
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/lbs`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<Map className="mr-2 h-4 w-4" />
-								Location Breakdown Structure
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/inspections`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<CheckSquare className="mr-2 h-4 w-4" />
-								Inspections
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/materials`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<Truck className="mr-2 h-4 w-4" />
-								Materials
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/tests`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<TestTube className="mr-2 h-4 w-4" />
-								Tests
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
 					</CardContent>
 				</Card>
 
-				{/* Quality Management */}
+				{/* Quality */}
 				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center">
-							<Shield className="mr-2 h-5 w-5 text-primary" />
-							Quality Management
-						</CardTitle>
+						<CardTitle>Quality</CardTitle>
 						<CardDescription>Quality assurance and control</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-3">
@@ -157,45 +129,38 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
-						<Link href={`/projects/${projectId}/quality/itp`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<FileCheck className="mr-2 h-4 w-4" />
-								ITP Documents
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/quality/lots`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<CheckSquare className="mr-2 h-4 w-4" />
-								Lots
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/quality/hold-witness`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<CheckSquare className="mr-2 h-4 w-4" />
-								Hold & Witness
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
 						<Link href={`/projects/${projectId}/quality/itp-register`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<FileCheck className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								ITP Register
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
-						<Link href={`/projects/${projectId}/quality/records`}>
+						<Link href={`/projects/${projectId}/inspections`}>
 							<Button variant="ghost" className="w-full justify-start">
 								<FileText className="mr-2 h-4 w-4" />
-								Records
+								Inspections
+								<ChevronRight className="ml-auto h-4 w-4" />
+							</Button>
+						</Link>
+						<Link href={`/projects/${projectId}/materials`}>
+							<Button variant="ghost" className="w-full justify-start">
+								<FileText className="mr-2 h-4 w-4" />
+								Materials
+								<ChevronRight className="ml-auto h-4 w-4" />
+							</Button>
+						</Link>
+						<Link href={`/projects/${projectId}/tests`}>
+							<Button variant="ghost" className="w-full justify-start">
+								<FileText className="mr-2 h-4 w-4" />
+								Tests
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
 						{showPrimaryTesting && (
 							<Link href={`/projects/${projectId}/quality/primary-testing`}>
 								<Button variant="ghost" className="w-full justify-start">
-									<TestTube className="mr-2 h-4 w-4" />
+									<FileText className="mr-2 h-4 w-4" />
 									Primary Testing (NSW)
 									<ChevronRight className="ml-auto h-4 w-4" />
 								</Button>
@@ -204,13 +169,10 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 					</CardContent>
 				</Card>
 
-				{/* HSE Management */}
+				{/* Health, Safety & Environment */}
 				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center">
-							<HardHat className="mr-2 h-5 w-5 text-destructive" />
-							Health, Safety & Environment
-						</CardTitle>
+						<CardTitle>Health, Safety & Environment</CardTitle>
 						<CardDescription>HSE management and compliance</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-3">
@@ -223,56 +185,53 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 						</Link>
 						<Link href={`/projects/${projectId}/hse/permits`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<FileCheck className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								Permits
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
 						<Link href={`/projects/${projectId}/hse/toolbox-talks`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<HardHat className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								Toolbox Talks
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
 						<Link href={`/projects/${projectId}/hse/safety-walks`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<HardHat className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								Safety Walks
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
 						<Link href={`/projects/${projectId}/hse/inductions`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<HardHat className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								Inductions
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
 						<Link href={`/projects/${projectId}/hse/incidents`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<HardHat className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								Incidents
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
-						<Link href={`/projects/${projectId}/hse/capa`}>
+						{/* <Link href={`/projects/${projectId}/hse/capa`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<FileCheck className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								CAPA
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
-						</Link>
+						</Link> */}
 					</CardContent>
 				</Card>
 
-				{/* Field Operations */}
+				{/* Site (formerly Field Operations) */}
 				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center">
-							<Wrench className="mr-2 h-5 w-5 text-warning" />
-							Field Operations
-						</CardTitle>
+						<CardTitle>Site</CardTitle>
 						<CardDescription>Site operations and daily activities</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-3">
@@ -290,24 +249,10 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
-						<Link href={`/projects/${projectId}/field/timesheets`}>
+						<Link href={`/projects/${projectId}/field/photos`}>
 							<Button variant="ghost" className="w-full justify-start">
 								<FileText className="mr-2 h-4 w-4" />
-								Timesheets
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/field/roster`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<Users className="mr-2 h-4 w-4" />
-								Roster
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-						<Link href={`/projects/${projectId}/field/plant`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<Wrench className="mr-2 h-4 w-4" />
-								Plant
+								Photos
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
@@ -317,16 +262,13 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 				{/* Approvals & Communication */}
 				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center">
-							<FileCheck className="mr-2 h-5 w-5 text-green-600" />
-							Approvals & Communication
-						</CardTitle>
+						<CardTitle>Approvals & Communication</CardTitle>
 						<CardDescription>Workflow approvals and communication</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-3">
 						<Link href={`/projects/${projectId}/approvals/designer`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<FileCheck className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								Approvals Designer
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
@@ -348,33 +290,10 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 					</CardContent>
 				</Card>
 
-				{/* Plans Management */}
-				<Card>
-					<CardHeader>
-						<CardTitle className="flex items-center">
-							<FileText className="mr-2 h-5 w-5 text-primary" />
-							Plans Management
-						</CardTitle>
-						<CardDescription>Quality, safety, and management plans</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-3">
-						<Link href={`/projects/${projectId}/plans`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<FileText className="mr-2 h-4 w-4" />
-								Management Plans
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-					</CardContent>
-				</Card>
-
 				{/* Tools & Analytics */}
 				<Card>
 					<CardHeader>
-						<CardTitle className="flex items-center">
-							<BarChart3 className="mr-2 h-5 w-5 text-primary" />
-							Tools & Analytics
-						</CardTitle>
+						<CardTitle>Tools & Analytics</CardTitle>
 						<CardDescription>Maps, reports, and project tools</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-3">
@@ -387,7 +306,7 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 						</Link>
 						<Link href={`/projects/${projectId}/reports`}>
 							<Button variant="ghost" className="w-full justify-start">
-								<BarChart3 className="mr-2 h-4 w-4" />
+								<FileText className="mr-2 h-4 w-4" />
 								Reports
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
@@ -402,37 +321,6 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 					</CardContent>
 				</Card>
 			</div>
-
-			{/* Recent Activity */}
-			<Card>
-				<CardHeader>
-					<CardTitle>Recent Activity</CardTitle>
-					<CardDescription>Latest project updates and changes</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<div className="space-y-4">
-						{assets.slice(0, 5).map((asset: any) => (
-							<div key={asset.id} className="flex items-center justify-between p-4 border rounded-lg">
-								<div className="flex items-center space-x-3">
-									<div className="flex-shrink-0">
-										<FileText className="h-5 w-5 text-muted-foreground" />
-									</div>
-									<div>
-										<p className="text-sm font-medium text-card-foreground">{asset.name}</p>
-										<p className="text-sm text-muted-foreground">{asset.type}</p>
-									</div>
-								</div>
-								<div className="text-sm text-muted-foreground">
-									{new Date(asset.createdAt).toLocaleDateString()}
-								</div>
-							</div>
-						))}
-						{assets.length === 0 && (
-							<p className="text-muted-foreground text-center py-4">No recent activity</p>
-						)}
-					</div>
-				</CardContent>
-			</Card>
 		</div>
 	)
 }

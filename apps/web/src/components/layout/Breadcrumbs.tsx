@@ -49,17 +49,36 @@ export function Breadcrumbs() {
 
           // Add specific sub-route if we're not on overview
           if (pathSegments[2] && pathSegments[2] !== 'overview') {
-            const subRoutes: Record<string, string> = {
-              'documents': 'Documents',
-              'settings': 'Settings',
-              'edit': 'Edit'
+            if (pathSegments[2] === 'quality' && pathSegments[3] === 'itp-templates') {
+              // Handle ITP Templates routes - skip to overview since quality isn't a standalone page
+              breadcrumbs[breadcrumbs.length - 1].isActive = false
+              breadcrumbs.push({ label: 'ITP Templates', href: `/projects/${projectId}/quality/itp-templates` })
+
+              if (pathSegments[4]) {
+                // Individual template detail page
+                breadcrumbs[breadcrumbs.length - 1].isActive = false
+                breadcrumbs.push({
+                  label: 'Template Details',
+                  href: pathname,
+                  isActive: true
+                })
+              } else {
+                // ITP Templates list page
+                breadcrumbs[breadcrumbs.length - 1].isActive = true
+              }
+            } else {
+              const subRoutes: Record<string, string> = {
+                'documents': 'Documents',
+                'settings': 'Settings',
+                'edit': 'Edit'
+              }
+              const subRouteLabel = subRoutes[pathSegments[2]] || pathSegments[2]
+              breadcrumbs.push({
+                label: subRouteLabel,
+                href: pathname,
+                isActive: true
+              })
             }
-            const subRouteLabel = subRoutes[pathSegments[2]] || pathSegments[2]
-            breadcrumbs.push({
-              label: subRouteLabel,
-              href: pathname,
-              isActive: true
-            })
           }
         } else {
           breadcrumbs[1].isActive = true

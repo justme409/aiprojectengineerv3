@@ -72,6 +72,7 @@ export default async function LotDetailPage({ params }: LotDetailPageProps) {
   return (
     <ItpTemplateDetailClient
       template={template}
+      templateId={template?.id || lot.itp_document_asset_id || ''}
       lot={lot}
       projectId={projectId}
       lotId={lotId}
