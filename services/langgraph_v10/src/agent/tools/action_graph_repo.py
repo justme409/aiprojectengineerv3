@@ -23,6 +23,8 @@ class IdempotentAssetWriteSpec(BaseModel):
     name: str
     description: str
     project_id: str
+    document_number: Optional[str] = None
+    revision_code: Optional[str] = None
     metadata: Dict[str, Any]
     content: Dict[str, Any]
     idempotency_key: str
@@ -145,10 +147,13 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
         existing_id, current_version, asset_uid = existing_asset
         new_version = current_version + 1
 
-        # Mark current version as not current
+        # Mark current version as not current and release idempotency_key to avoid UNIQUE violation
         cursor.execute("""
-            UPDATE public.assets SET is_current = false WHERE id = %s
-        """, (existing_id,))
+            UPDATE public.assets
+            SET is_current = false,
+                idempotency_key = CONCAT(idempotency_key, ':v', %s)
+            WHERE id = %s
+        """, (current_version, existing_id))
 
         # Insert new version
         asset_id = str(uuid.uuid4())
@@ -156,12 +161,19 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
             INSERT INTO public.assets (
                 id, asset_uid, version, is_current, supersedes_asset_id,
                 type, subtype, name, organization_id, project_id,
+                document_number, revision_code,
                 metadata, content, idempotency_key, status, approval_state, classification
-            ) VALUES (%s, %s, %s, true, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'draft', 'not_required', 'internal')
+            ) VALUES (
+                %s, %s, %s, true, %s,
+                %s, %s, %s, %s, %s,
+                %s, %s,
+                %s, %s, %s, 'draft', 'not_required', 'internal'
+            )
         """, (
             asset_id, asset_uid, new_version, existing_id,
             spec.asset_type, spec.asset_subtype or None, spec.name,
             organization_id, spec.project_id,
+            spec.document_number, spec.revision_code,
             Json(spec.metadata), Json(spec.content), spec.idempotency_key
         ))
 
@@ -176,12 +188,19 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
             INSERT INTO public.assets (
                 id, asset_uid, version, is_current,
                 type, subtype, name, organization_id, project_id,
+                document_number, revision_code,
                 metadata, content, idempotency_key, status, approval_state, classification
-            ) VALUES (%s, %s, 1, true, %s, %s, %s, %s, %s, %s, %s, %s, 'draft', 'not_required', 'internal')
+            ) VALUES (
+                %s, %s, 1, true,
+                %s, %s, %s, %s, %s,
+                %s, %s,
+                %s, %s, %s, 'draft', 'not_required', 'internal'
+            )
         """, (
             asset_id, asset_uid,
             spec.asset_type, spec.asset_subtype or None, spec.name,
             organization_id, spec.project_id,
+            spec.document_number, spec.revision_code,
             Json(spec.metadata), Json(spec.content), spec.idempotency_key
         ))
 

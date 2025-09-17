@@ -4,69 +4,41 @@ fields required for a document register. Do NOT extract domain content
 such as standards, materials, equipment, hazards, requirements, etc.
 """
 
-CLASSIFY_DOCUMENT_PROMPT = """
-You are classifying a source file for a construction project document register.
+# Legacy prompts removed; use UNIFIED_DOCUMENT_METADATA_PROMPT exclusively
 
-Task: Decide whether this file is a drawing or a non-drawing document, and
-return a best-effort subtype and discipline if and only if it is a drawing.
+DOCUMENT_METADATA_DRAWING_PROMPT = None
 
-Rules:
-- Use only signals present in the content and visible title block (if any).
-- Do not guess fields that are not justified by the content.
-- doc_kind must be either "drawing" or "document".
-- subtype should be null unless the evidence clearly supports one of:
-  [general_arrangement, section, elevation, detail, plan, schedule, diagram, layout]
-- discipline should be null unless obvious (e.g., Civil, Structural, Electrical, Mechanical, Architectural).
+DOCUMENT_METADATA_DOCUMENT_PROMPT = None
 
-Return a concise reason string explaining your decision.
+# Unified prompt to classify and extract in a single LLM call
+UNIFIED_DOCUMENT_METADATA_PROMPT = """
+You are extracting register metadata for a construction project in a SINGLE step using only the provided file name and content.
 
-FILENAME: {file_name}
-CONTENT: {content}
-"""
+Task:
+- Classify the file as either a drawing or a non-drawing document using only evidence present.
+- Extract ONLY document-management metadata needed for a register. Do not extract domain content like standards, requirements, risks, equipment, quantities, or narrative.
 
-DOCUMENT_METADATA_DRAWING_PROMPT = """
-You are extracting drawing register metadata for a construction project.
-Extract only document-management fields. Do not extract standards, requirements,
-risks, equipment, metrics, or any non-register content.
+Output contract (single unified schema; leave fields null when not present):
+- doc_kind: "drawing" or "document" (REQUIRED)
+- document_number: string or null
+- revision_code: string or null
+- title: string or null
+- discipline: string or null (e.g., Civil, Structural, Electrical, Mechanical, Architectural)
+- classification_level: string or null (default to internal if unstated)
+- category: string or null (documents only; e.g., specification, report, contract, correspondence, schedule, manual, procedure, other)
+- subtype: string or null (for BOTH documents and drawings, non-prescriptive label inferred from evidence; e.g., for documents: general_spec, contract_conditions; for drawings: general_arrangement, section, elevation, detail, plan, schedule, diagram, layout)
+- sheet_number: string or null (typically drawings)
+- total_sheets: integer or null (typically drawings)
+- scale: string or null (typically drawings; e.g., 1:100 @A1)
+- additional_fields: JSON string or null. Must be a valid JSON object encoded as a string (e.g., "{{\"edition\":\"3rd\",\"issuing_body\":\"TfNSW\"}}"). Do not return structured objects here; return a string.
 
-Definitions:
-- document_number: The official drawing number from the title block (e.g., C-101, GA-2001).
-- revision_code: The exact revision identifier (e.g., A, B, C, 0, 1, 2). Do not invent values.
-- title: The drawing title from the title block or clear header text.
-- subtype: One of [general_arrangement, section, elevation, detail, plan, schedule, diagram, layout] if supported by evidence.
-- discipline: The engineering discipline if present (e.g., Civil, Structural, Electrical, Mechanical, Architectural).
-- sheet_number: The sheet number if present (e.g., 3).
-- total_sheets: The total number of sheets in the set if present (e.g., 10).
-- scale: Scale string if present (e.g., 1:100 @A1).
-- classification_level: Security classification if present, else default to internal.
-- subdocuments: If the file contains multiple distinct drawings, list each as a subdocument with
-  document_number, revision_code, title, page_range, subtype, and discipline when present.
-- additional_fields: Any extra register-relevant fields discovered (key/value pairs). Do not include domain content.
+Guidance (non-prescriptive):
+- For documents, if a broad subtype naturally fits (e.g., general_spec, technical_spec, method_statement), include it; otherwise keep null.
+- Never invent values; rely only on content/title signals. If unsure, prefer null.
+-- If multiple distinct items are present (e.g., multiple drawings or appended documents), ONLY extract the dominant item. Do not emit subdocuments.
+- Return a single structured response adhering to the schema; no prose.
 
 FILENAME: {file_name}
-CONTENT: {content}
-
-Extract the fields faithfully as described above and leave missing values null rather than guessing.
-"""
-
-DOCUMENT_METADATA_DOCUMENT_PROMPT = """
-You are extracting document register metadata for a construction project.
-Extract only document-management fields. Do not extract standards, requirements,
-risks, equipment, metrics, or any non-register content.
-
-Definitions:
-- document_number: The official document number or reference (e.g., SPEC-001, REP-2024-05).
-- revision_code: The exact revision identifier (e.g., A, B, C, 0, 1, 2). Do not invent values.
-- title: The document title; if no official name exists, use the main title text.
-- category: One of [specification, report, contract, correspondence, schedule, manual, procedure, other] if discernible.
-- discipline: Discipline if stated or strongly implied (e.g., Civil, Structural, Electrical, Mechanical, Architectural).
-- classification_level: Security classification if present, else default to internal.
-- subdocuments: If the file encloses separate documents (e.g., appendices), list each subdocument with
-  doc_kind (document/drawing), title, document_number, revision_code, page_range, subtype, and discipline when present.
-- additional_fields: Any extra register-relevant fields discovered (key/value pairs). Do not include domain content.
-
-FILENAME: {file_name}
-CONTENT: {content}
-
-Extract the fields faithfully as described above and leave missing values null rather than guessing.
+CONTENT:
+{content}
 """

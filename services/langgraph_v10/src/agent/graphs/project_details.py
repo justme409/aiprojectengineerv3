@@ -1,5 +1,6 @@
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel
+from agent.tools.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
 import re
 import json
 
@@ -7,7 +8,7 @@ class ProjectDetailsExtractionState(BaseModel):
     project_id: str
     txt_project_documents: List[Dict[str, Any]] = []
     project_details: Optional[Dict[str, Any]] = None
-    error: str = ""
+    error: Optional[str] = ""
     done: bool = False
 
 def extract_project_name(content: str) -> Optional[str]:
@@ -207,7 +208,8 @@ def create_project_details_asset_spec(state: ProjectDetailsExtractionState) -> D
             "project_id": state.project_id,
             "content": state.project_details
         },
-        "idempotency_key": f"project_details:{state.project_id}"
+        "idempotency_key": f"project_details:{state.project_id}",
+        "edges": []
     }
 
     return spec
@@ -215,21 +217,45 @@ def create_project_details_asset_spec(state: ProjectDetailsExtractionState) -> D
 # Graph definition
 def create_project_details_extraction_graph():
     """Create the project details extraction graph"""
-    from langgraph.graph import StateGraph
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.types import interrupt
 
     graph = StateGraph(ProjectDetailsExtractionState)
 
     # Add nodes
     graph.add_node("extract_details", project_details_extraction_node)
-    graph.add_node("create_asset", lambda state: {
-        "project_details_asset_spec": create_project_details_asset_spec(state)
-    })
+    def persist_project_details(state: ProjectDetailsExtractionState) -> Dict[str, Any]:
+        spec = create_project_details_asset_spec(state)
+        if not spec:
+            return {"error": "No project details to persist"}
+
+        write_spec = IdempotentAssetWriteSpec(
+            asset_type=spec["asset"]["type"],
+            asset_subtype=spec["asset"].get("type", "project"),
+            name=spec["asset"]["name"],
+            description=f"Project details for {spec['asset']['name']}",
+            project_id=state.project_id,
+            metadata={},
+            content=spec["asset"]["content"],
+            idempotency_key=spec["idempotency_key"],
+            edges=spec.get("edges", [])
+        )
+        upsertAssetsAndEdges([write_spec])
+        return {"done": True}
+
+    graph.add_node("persist_asset", persist_project_details)
+    def _pause_for_inspection(state: ProjectDetailsExtractionState) -> ProjectDetailsExtractionState:
+        interrupt("project_details: inspect state and resume to continue")
+        return state
+    graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow
     graph.set_entry_point("extract_details")
-    graph.add_edge("extract_details", "create_asset")
+    graph.add_edge("extract_details", "persist_asset")
+    graph.add_edge("persist_asset", "pause_for_inspection")
+    graph.add_edge("pause_for_inspection", END)
 
-    return graph.compile()
+    return graph.compile(checkpointer=True)
 
 # Backwards-compatible factory expected by orchestrator
 def create_project_details_graph():

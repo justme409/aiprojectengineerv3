@@ -12,8 +12,6 @@ from agent.prompts.tmp_prompt import PROMPT as TMP_PROMPT
 from agent.prompts.construction_program_prompt import PROMPT as CONSTR_PROMPT
 from agent.tools.db_tools import (
     fetch_all_project_documents,
-    save_management_plan_to_project,
-    upsert_asset,
 )
 from agent.prompts.qse_system import QSE_SYSTEM_NODES, QSE_SYSTEM_SUMMARY
 from agent.tools.action_graph_repo import (
@@ -135,9 +133,15 @@ class OutputState(TypedDict):
     plan_html: Optional[str]
 
 def fetch_docs_node(state: PlanGenerationState) -> PlanGenerationState:
-    # Fetch ALL project documents (not only those with extracted content)
-    docs = fetch_all_project_documents.invoke(state["project_id"])
-    return {**state, "txt_project_documents": docs}
+    # Use the txt_project_documents that were already extracted by document_extraction.py
+    # If not present, fall back to fetching from database
+    if state.get("txt_project_documents"):
+        # Already have extracted documents from document_extraction.py
+        return state
+    else:
+        # Fallback: fetch from database if no extracted documents available
+        docs = fetch_all_project_documents.invoke(state["project_id"])
+        return {**state, "txt_project_documents": docs}
 
 def generate_plan_node(state: PlanGenerationState) -> PlanGenerationState:
     docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
@@ -167,16 +171,7 @@ def generate_plan_node(state: PlanGenerationState) -> PlanGenerationState:
     return {**state, "plan_html": html, "plan_type": plan_type}
 
 def save_plan_node(state: PlanGenerationState) -> PlanGenerationState:
-    # Save to legacy projects column for backward compatibility (store as JSON object with html)
-    column = PLAN_TO_COLUMN[state["plan_type"]]
-    save_ok = save_management_plan_to_project.invoke({
-        "project_id": state["project_id"],
-        "column_name": column,
-        "plan_json": json.dumps({"html": state.get("plan_html") or ""}),
-    })
-    if not save_ok:
-        raise RuntimeError("Failed to persist plan JSON to projects table")
-    # Upsert to assets as a plan asset with HTML payload
+    # Persist the plan exclusively into the assets table (idempotent, versioned)
     plan_type = state.get("plan_type") or "plan"
     title = f"{plan_type.upper()} Plan"
     source_document_ids = [d.get("id") for d in state.get("txt_project_documents", []) if d.get("id")]
@@ -210,7 +205,15 @@ builder.add_node("save_plan", save_plan_node)
 builder.add_edge(START, "fetch_docs")
 builder.add_edge("fetch_docs", "generate_plan")
 builder.add_edge("generate_plan", "save_plan")
-builder.add_edge("save_plan", END)
+from langgraph.types import interrupt
+
+def _pause_for_inspection(state: PlanGenerationState) -> PlanGenerationState:
+    interrupt("plan_generation: inspect state and resume to continue")
+    return state
+
+builder.add_node("pause_for_inspection", _pause_for_inspection)
+builder.add_edge("save_plan", "pause_for_inspection")
+builder.add_edge("pause_for_inspection", END)
 
 plan_generation_graph = builder.compile(checkpointer=True)
 
@@ -233,9 +236,15 @@ class SeqOutput(TypedDict):
     results: List[Dict[str, Any]]
 
 def seq_fetch_docs_node(state: SeqState) -> SeqState:
-    # Fetch ALL project documents for sequencing
-    docs = fetch_all_project_documents.invoke(state["project_id"])
-    return {**state, "txt_project_documents": docs, "results": []}
+    # Use the txt_project_documents that were already extracted by document_extraction.py
+    # If not present, fall back to fetching from database
+    if state.get("txt_project_documents"):
+        # Already have extracted documents from document_extraction.py
+        return {**state, "results": state.get("results", [])}
+    else:
+        # Fallback: fetch from database if no extracted documents available
+        docs = fetch_all_project_documents.invoke(state["project_id"])
+        return {**state, "txt_project_documents": docs, "results": []}
 
 def _gen_and_save(plan_type: str, state: SeqState) -> Dict[str, Any]:
     docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
@@ -257,15 +266,7 @@ def _gen_and_save(plan_type: str, state: SeqState) -> Dict[str, Any]:
     structured_llm = llm.with_structured_output(PlanHtml, method="json_mode")
     response = structured_llm.invoke(prompt)
     html = response.html
-    # Save to legacy column as JSON object containing html (fail-fast)
-    save_ok = save_management_plan_to_project.invoke({
-        "project_id": state["project_id"],
-        "column_name": PLAN_TO_COLUMN[plan_type],
-        "plan_json": json.dumps({"html": html}),
-    })
-    if not save_ok:
-        raise RuntimeError("Failed to persist plan JSON to projects table (sequencer)")
-    # Persist to knowledge graph via action_graph_repo
+    # Persist to knowledge graph via action_graph_repo (assets only)
     defaults = _default_category_and_tags_for_plan_type(plan_type)
     source_document_ids = [d.get("id") for d in state.get("txt_project_documents", []) if d.get("id")]
     metadata = {

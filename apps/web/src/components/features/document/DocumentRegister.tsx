@@ -46,9 +46,8 @@ export default function DocumentRegister({ projectId, uploadButton }: DocumentRe
       const drws = drwRes.ok ? (await drwRes.json()).assets || [] : []
 
       // Combine and ensure only document/drawing types are included
-      const combined: AssetHead[] = [...docs, ...drws].filter(
-        (a: AssetHead) => a.type === 'document' || a.type === 'drawing'
-      )
+      const combined: AssetHead[] = [...docs, ...drws]
+        .filter((a: AssetHead) => a.type === 'document' || a.type === 'drawing')
       setAssets(combined)
       if (!docsRes.ok || !drwRes.ok) {
         console.error('Failed to fetch some assets:', docsRes.statusText, drwRes.statusText)
@@ -62,7 +61,7 @@ export default function DocumentRegister({ projectId, uploadButton }: DocumentRe
 
   const handleDownloadDocument = async (asset: AssetHead) => {
     try {
-      const blobUrl = asset.content?.source_blob_url || asset.content?.blob_url
+      const blobUrl = asset.metadata?.blob_url || asset.content?.source_blob_url || asset.content?.blob_url
       if (!blobUrl) {
         console.error('No blob URL available for download')
         return
@@ -103,13 +102,20 @@ export default function DocumentRegister({ projectId, uploadButton }: DocumentRe
   const groupedByDocNumber = useMemo(() => {
     const groups: Record<string, AssetHead[]> = {}
     for (const a of assets) {
-      const key = `${a.type}:${a.document_number || a.id}`
+      const ur = a.metadata?.llm_outputs?.unified_register
+      if (!ur) continue
+      const key = `${ur.doc_kind}:${ur.document_number}`
       if (!groups[key]) groups[key] = []
       groups[key].push(a)
     }
-    // Sort each group by version desc
+    // Sort each group by created_at desc, then version desc for safety
     for (const key of Object.keys(groups)) {
-      groups[key].sort((a, b) => (b.version || 0) - (a.version || 0))
+      groups[key].sort((a, b) => {
+        const at = new Date(a.updated_at || a.created_at || 0).getTime()
+        const bt = new Date(b.updated_at || b.created_at || 0).getTime()
+        if (bt !== at) return bt - at
+        return (b.version || 0) - (a.version || 0)
+      })
     }
     return groups
   }, [assets])
@@ -117,11 +123,12 @@ export default function DocumentRegister({ projectId, uploadButton }: DocumentRe
   const rows = useMemo(() => {
     return Object.entries(groupedByDocNumber).map(([key, versions]) => {
       const latest = versions[0]
-      const name = latest.name
-      const number = latest.document_number || '-'
-      const revision = latest.revision_code || '-'
-      const type = latest.type
-      const subtype = latest.subtype
+      const ur = latest.metadata?.llm_outputs?.unified_register
+      const name = ur?.title || '-'
+      const number = ur?.document_number || '-'
+      const revision = ur?.revision_code || '-'
+      const type = (ur?.doc_kind) as any
+      const subtype = ur?.subtype
       const count = versions.length
       return { key, latest, versions, name, number, revision, type, subtype, count }
     })
@@ -166,7 +173,7 @@ export default function DocumentRegister({ projectId, uploadButton }: DocumentRe
         <TableBody>
           {rows.map(({ key, latest, versions, name, number, revision, type, subtype, count }) => {
             const isExpanded = !!expanded[key]
-            const discipline = latest.content?.discipline || latest.metadata?.discipline
+            const discipline = latest.metadata?.llm_outputs?.unified_register?.discipline
             return (
               <React.Fragment key={key}>
                 <TableRow>
@@ -248,36 +255,7 @@ export default function DocumentRegister({ projectId, uploadButton }: DocumentRe
                           </Table>
                         </div>
 
-                        {/* Subdocuments if present */}
-                        {(latest.content?.subdocuments?.length > 0) && (
-                          <div className="space-y-2">
-                            <div className="text-sm text-muted-foreground">Contained subdocuments</div>
-                            <div className="border rounded">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Kind</TableHead>
-                                    <TableHead>Title</TableHead>
-                                    <TableHead>Number</TableHead>
-                                    <TableHead>Revision</TableHead>
-                                    <TableHead>Pages</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {latest.content.subdocuments.map((sd: any, idx: number) => (
-                                    <TableRow key={idx}>
-                                      <TableCell>{sd.doc_kind}</TableCell>
-                                      <TableCell>{sd.title || '-'}</TableCell>
-                                      <TableCell>{sd.document_number || '-'}</TableCell>
-                                      <TableCell>{sd.revision_code || '-'}</TableCell>
-                                      <TableCell>{sd.page_range || '-'}</TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          </div>
-                        )}
+                        {/* Subdocuments removed by design */}
                       </div>
                     </TableCell>
                   </TableRow>

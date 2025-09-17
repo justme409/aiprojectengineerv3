@@ -24,8 +24,8 @@ class Document(BaseModel):
 class ExtractionState(BaseModel):
     project_id: str
     document_ids: List[str] = []
-    txt_project_documents: Annotated[List[Dict[str, Any]], "add"] = []
-    failed_documents: Annotated[List[Dict[str, str]], "add"] = []
+    txt_project_documents: List[Dict[str, Any]] = []
+    failed_documents: List[Dict[str, str]] = []
     error: str = ""
     done: bool = False
     failed: bool = False
@@ -82,6 +82,28 @@ async def fetch_document_details(state: ExtractionState) -> Dict[str, Any]:
             record['project_id'] = str(record['project_id'])
 
     return {"document_details": records}
+
+async def fetch_document_ids_for_project(state: ExtractionState) -> Dict[str, Any]:
+    """Fetch document/drawing asset IDs for the given project when IDs are not supplied."""
+    # If IDs already provided (targeted run), normalize to strings and use them
+    if state.document_ids:
+        return {"document_ids": [str(x) for x in state.document_ids]}
+
+    from agent.tools.db_fetcher import DbFetcherState
+
+    fetch_state = DbFetcherState(queries=[{
+        "table": "assets",
+        "columns": ["id"],
+        "where": {
+            "project_id": state.project_id,
+            "type": {"$in": ["document", "drawing"]},
+            "is_deleted": False
+        }
+    }])
+
+    result = db_fetcher_step(fetch_state)
+    ids = [str(r["id"]) for r in result.get("records", [])]
+    return {"document_ids": ids}
 
 async def extract_single_document(doc_detail: Dict[str, Any], project_id: str) -> Dict[str, Any]:
     """Extract content from a single document using real Azure Document Intelligence"""
@@ -183,7 +205,11 @@ async def document_extraction_node(state: ExtractionState) -> Dict[str, Any]:
         for doc in documents
     ]
 
+    # Capture successfully processed document IDs for orchestrator state
+    processed_document_ids = [d["id"] for d in txt_project_documents]
+
     return {
+        "document_ids": processed_document_ids,
         "txt_project_documents": txt_project_documents,
         "failed_documents": failed_docs,
         "error": ("Document Extraction produced no content" if failed_flag else ""),
@@ -196,32 +222,34 @@ def create_asset_write_specs(state: ExtractionState) -> List[Dict[str, Any]]:
     specs = []
 
     for doc in state.txt_project_documents:
+        # Support dicts emitted by extraction_node
+        d = doc if isinstance(doc, dict) else doc.model_dump()
+        meta = d.get("metadata", {}) or {}
         spec = {
             "asset": {
-                "type": doc.metadata.get("type", "document"),
-                "name": doc.metadata.get("name", doc.file_name),
+                "type": meta.get("type", "document"),
+                "name": meta.get("name", d.get("file_name")),
                 "project_id": state.project_id,
-                "document_number": doc.metadata.get("document_number"),
-                "revision_code": doc.metadata.get("revision"),
+                # Do not set document_number/revision here; metadata graph owns these
                 "approval_state": "not_required",
                 "classification": "internal",
+                # CONTENT: only the raw document text (object shape required by writer)
                 "content": {
-                    "source_document_id": doc.id,
-                    "extracted_content": doc.content,
-                    "file_name": doc.file_name,
-                    "blob_url": doc.blob_url,
-                    "storage_path": doc.storage_path,
-                    "extraction_method": doc.metadata.get("extraction_method"),
-                    "word_count": doc.metadata.get("word_count"),
-                    "character_count": doc.metadata.get("character_count")
+                    "extracted_content": d.get("content")
                 },
+                # METADATA: all extraction context
                 "metadata": {
-                    "category": doc.metadata.get("category"),
-                    "llm_outputs": doc.metadata.get("llm_outputs", {})
+                    "source_document_id": d.get("id"),
+                    "file_name": d.get("file_name"),
+                    "blob_url": d.get("blob_url"),
+                    "storage_path": d.get("storage_path"),
+                    "extraction_method": meta.get("extraction_method"),
+                    "word_count": meta.get("word_count"),
+                    "character_count": meta.get("character_count")
                 },
                 "status": "draft"
             },
-            "idempotency_key": f"doc_extract:{state.project_id}:{doc.id}",
+            "idempotency_key": f"doc_extract:{state.project_id}:{d.get('id')}",
             "edges": []
         }
         specs.append(spec)
@@ -272,6 +300,7 @@ def create_document_extraction_graph():
     graph = StateGraph(ExtractionState)
 
     # Add nodes
+    graph.add_node("fetch_ids", fetch_document_ids_for_project)
     graph.add_node("extract", document_extraction_node)
     graph.add_node("persist_assets", persist_assets_to_database)
 
@@ -282,7 +311,8 @@ def create_document_extraction_graph():
     graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow
-    graph.set_entry_point("extract")
+    graph.set_entry_point("fetch_ids")
+    graph.add_edge("fetch_ids", "extract")
     graph.add_edge("extract", "persist_assets")
     graph.add_edge("persist_assets", "pause_for_inspection")
 

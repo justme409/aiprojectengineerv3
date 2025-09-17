@@ -79,7 +79,6 @@ def example_document_metadata_extraction():
     initial_state = DocumentMetadataState(
         project_id="project-123",
         document_ids=["doc-001"],
-        drawing_ids=["drawing-001"],
         txt_project_documents=example_documents
     )
 
@@ -93,24 +92,15 @@ def example_document_metadata_extraction():
         if result.extracted_metadata:
             metadata = result.extracted_metadata
 
-            print(f"Total documents processed: {metadata['processing_summary']['total_documents_processed']}")
-            print(f"Documents extracted: {metadata['processing_summary']['documents_extracted']}")
-            print(f"Drawings extracted: {metadata['processing_summary']['drawings_extracted']}")
+            print(f"Assets extracted: {len(metadata.get('assets', []))}")
 
-            # Show document metadata
-            for doc in metadata.get("documents", []):
-                print(f"\nDocument: {doc['document_number']} (Rev: {doc['revision_code']})")
-                print(f"Type: {doc['document_type']}")
-                print(f"Subject: {doc['primary_subject']}")
-                print(f"Requirements found: {len(doc['requirements'])}")
-                print(f"Hazards identified: {len(doc['hazards_risks'])}")
-
-            # Show drawing metadata
-            for drawing in metadata.get("drawings", []):
-                print(f"\nDrawing: {drawing['document_number']} (Rev: {drawing['revision_code']})")
-                print(f"Subtype: {drawing['subtype']}")
-                print(f"Title: {drawing['title']}")
-                print(f"Discipline: {drawing['discipline']}")
+            # Show unified assets
+            for asset in metadata.get("assets", []):
+                kind = (asset.get('asset_type') or asset.get('doc_kind') or 'document').lower()
+                print(f"\n{kind.capitalize()}: {asset['document_number']} (Rev: {asset.get('revision_code')})")
+                print(f"Subtype: {asset.get('subtype')}")
+                print(f"Title: {asset.get('title')}")
+                print(f"Discipline: {asset.get('discipline')}")
 
         if result.asset_specs:
             print(f"\nAssets created: {len(result.asset_specs)}")

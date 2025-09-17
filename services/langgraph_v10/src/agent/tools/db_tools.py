@@ -77,7 +77,7 @@ def fetch_project_documents_with_content(project_id: str) -> list[dict]:
             SELECT id, file_name, COALESCE(raw_content, '') AS raw_content
             FROM documents
             WHERE project_id = %s
-              AND status <> 'deleted'
+              AND (processing_status IS NULL OR processing_status <> 'deleted')
               AND raw_content IS NOT NULL
             ORDER BY updated_at DESC
             """,
@@ -97,7 +97,7 @@ def fetch_all_project_documents(project_id: str) -> list[dict]:
             SELECT id, file_name, COALESCE(raw_content, '') AS raw_content
             FROM documents
             WHERE project_id = %s
-              AND status <> 'deleted'
+              AND (processing_status IS NULL OR processing_status <> 'deleted')
             ORDER BY updated_at DESC
             """,
             (project_id,),
