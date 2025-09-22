@@ -1,7 +1,6 @@
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.types import interrupt
 import os
 import logging
 from agent.prompts.itp_generation_prompt import ITP_GENERATION_PROMPT
@@ -187,11 +186,6 @@ def create_itp_generation_graph():
         "asset_specs": [create_itp_asset_spec(state)]
     })
     graph.add_node("persist_assets", persist_itp_to_database)
-    # Pause for inspection to expose subgraph state via checkpoint
-    def _pause_for_inspection(state: ItpGenerationState) -> Dict[str, Any]:
-        interrupt("itp_generation: inspect state and resume to continue")
-        return {}
-    graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow following V9 patterns
     graph.set_entry_point("ensure_wbs")
@@ -199,8 +193,7 @@ def create_itp_generation_graph():
     graph.add_edge("identify_targets", "generate_itps")
     graph.add_edge("generate_itps", "create_asset_spec")
     graph.add_edge("create_asset_spec", "persist_assets")
-    graph.add_edge("persist_assets", "pause_for_inspection")
-    graph.add_edge("pause_for_inspection", END)
+    graph.add_edge("persist_assets", END)
 
     return graph.compile(checkpointer=True)
 

@@ -1,6 +1,6 @@
 import { auth } from '@/lib/auth'
 import { getProjectById } from '@/lib/actions/project-actions'
-import { getItpTemplatesForProject } from '@/lib/actions/lot-actions'
+import { query } from '@/lib/db'
 import ItpTemplateListClient from '@/components/features/project/ItpTemplateListClient'
 
 type ItpTemplatesPageProps = {
@@ -28,17 +28,19 @@ export default async function ItpTemplatesPage({ params }: ItpTemplatesPageProps
     throw new Error('Access denied')
   }
 
-  // Fetch ITP templates for the project
-  const templatesResult = await getItpTemplatesForProject(projectId)
-  if (!templatesResult.success || !templatesResult.data) {
-    throw new Error('Failed to fetch ITP templates')
-  }
-
-  const templates = templatesResult.data!.map((template: any) => ({
-    id: template.id,
-    name: template.name,
-    version: template.content?.version || null,
-    status: template.status,
+  // Fetch ITP templates for the project from asset_heads; treat both 'itp_template' and 'itp_document' as templates
+  const { rows } = await query(
+    `SELECT id, name, status, content
+     FROM public.asset_heads
+     WHERE project_id = $1 AND type IN ('itp_template','itp_document')
+     ORDER BY updated_at DESC`,
+    [projectId]
+  )
+  const templates = rows.map((t: any) => ({
+    id: t.id,
+    name: t.name,
+    version: t.content?.version || null,
+    status: t.status,
   }))
 
   return (

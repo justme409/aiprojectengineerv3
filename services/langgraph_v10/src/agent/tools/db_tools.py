@@ -417,6 +417,38 @@ def fetch_reference_documents() -> list[dict]:
     conn.close()
     return [{"id": str(r[0]), "spec_id": r[1], "spec_name": r[2], "org_identifier": r[3]} for r in results]
 
+@tool
+def fetch_standard_document_content(spec_ids: list[str]) -> list[dict]:
+    """Fetch actual standard document content by spec_id list."""
+    if not spec_ids:
+        return []
+
+    conn = get_db_connection()
+    with conn.cursor() as cursor:
+        placeholders = ','.join(['%s'] * len(spec_ids))
+        cursor.execute(
+            f"""
+            SELECT rd.id, rd.spec_id, rd.spec_name, rd.org_identifier,
+                   COALESCE(rd.content_raw, '') AS content
+            FROM reference_documents rd
+            WHERE rd.spec_id = ANY(%s)
+            ORDER BY rd.org_identifier, rd.spec_id
+            """,
+            (spec_ids,)
+        )
+        results = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "id": str(r[0]),
+            "spec_id": r[1],
+            "spec_name": r[2],
+            "org_identifier": r[3],
+            "content": r[4]
+        }
+        for r in results
+    ]
+
 # Description: DB tools for fetching/saving document info.
 # Source: Ported from agents_v7 document_content_extraction.py. Note: Easy to swap to Supabase URL—replace connect() with URL string.
 

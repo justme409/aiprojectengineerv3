@@ -123,25 +123,26 @@ class PlanGenerationState(TypedDict):
     txt_project_documents: List[Dict[str, Any]]
     plan_html: Optional[str]
     error: Optional[str]
+    generated_plans: List[Dict[str, Any]]
 
 class InputState(TypedDict):
     project_id: str
     # plan_type is optional for the single-plan graph; if omitted, default to 'pqp'
     plan_type: Optional[str]
+    # documents must be provided upstream; this graph does not fetch
+    txt_project_documents: List[Dict[str, Any]]
 
 class OutputState(TypedDict):
+    generated_plans: List[Dict[str, Any]]
     plan_html: Optional[str]
 
 def fetch_docs_node(state: PlanGenerationState) -> PlanGenerationState:
     # Use the txt_project_documents that were already extracted by document_extraction.py
-    # If not present, fall back to fetching from database
+    # Fail fast: do NOT fetch from database here
     if state.get("txt_project_documents"):
         # Already have extracted documents from document_extraction.py
         return state
-    else:
-        # Fallback: fetch from database if no extracted documents available
-        docs = fetch_all_project_documents.invoke(state["project_id"])
-        return {**state, "txt_project_documents": docs}
+    raise ValueError("txt_project_documents missing; provide extracted documents upstream (no DB fallback)")
 
 def generate_plan_node(state: PlanGenerationState) -> PlanGenerationState:
     docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
@@ -170,6 +171,44 @@ def generate_plan_node(state: PlanGenerationState) -> PlanGenerationState:
     html = response.html or ""
     return {**state, "plan_html": html, "plan_type": plan_type}
 
+def _generate_plan_for_type(plan_type: str, state: PlanGenerationState) -> PlanGenerationState:
+    docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
+    system_prompt = PLAN_TO_PROMPT[plan_type]
+    qse_context = json.dumps(QSE_SYSTEM_NODES)
+    qse_summary = QSE_SYSTEM_SUMMARY
+    output_instructions = (
+        "\n\nOUTPUT FORMAT (STRICT): Return JSON with a single field 'html' that contains the FINAL HTML BODY ONLY. "
+        "Do NOT include <html>, <head>, or <body> tags. Use semantic HTML elements (h1-h3, p, ul/ol, table, a). "
+        "Render a complete, professional management plan suitable for direct display and TinyMCE editing."
+    )
+    prompt = (
+        f"{system_prompt}\n\n"
+        f"QSE SYSTEM SUMMARY:\n{qse_summary}\n\n"
+        f"QSE SYSTEM REFERENCE (adjacency list):\n{qse_context}\n\n"
+        f"PROJECT DOCUMENTS:\n{docs_text}"
+        f"{VERBOSITY_DIRECTIVE}"
+        f"{ENGINEERING_IMPLEMENTATION_DIRECTIVE}"
+        f"{QSE_REFERENCING_DIRECTIVE}"
+        f"{NUMBERING_AND_ARTIFACTS_DIRECTIVE}"
+        f"{output_instructions}"
+    )
+    structured_llm = llm.with_structured_output(PlanHtml, method="json_mode")
+    response = structured_llm.invoke(prompt)
+    html = response.html or ""
+    return {**state, "plan_html": html, "plan_type": plan_type}
+
+def generate_pqp_node(state: PlanGenerationState) -> PlanGenerationState:
+    return _generate_plan_for_type("pqp", state)
+
+def generate_emp_node(state: PlanGenerationState) -> PlanGenerationState:
+    return _generate_plan_for_type("emp", state)
+
+def generate_ohsmp_node(state: PlanGenerationState) -> PlanGenerationState:
+    return _generate_plan_for_type("ohsmp", state)
+
+def generate_tmp_node(state: PlanGenerationState) -> PlanGenerationState:
+    return _generate_plan_for_type("tmp", state)
+
 def save_plan_node(state: PlanGenerationState) -> PlanGenerationState:
     # Persist the plan exclusively into the assets table (idempotent, versioned)
     plan_type = state.get("plan_type") or "plan"
@@ -195,27 +234,34 @@ def save_plan_node(state: PlanGenerationState) -> PlanGenerationState:
         edges=[],
     )
     upsertAssetsAndEdges([asset_spec])
-    return state
+    # Append to generated_plans summary in state
+    existing = state.get("generated_plans") or []
+    summary_entry = {"plan_type": plan_type, "title": title}
+    return {**state, "generated_plans": [*existing, summary_entry]}
 
 builder = StateGraph(PlanGenerationState, input=InputState, output=OutputState)
 builder.add_node("fetch_docs", fetch_docs_node)
-builder.add_node("generate_plan", generate_plan_node)
-builder.add_node("save_plan", save_plan_node)
+builder.add_node("generate_pqp", generate_pqp_node)
+builder.add_node("save_pqp", save_plan_node)
+builder.add_node("generate_emp", generate_emp_node)
+builder.add_node("save_emp", save_plan_node)
+builder.add_node("generate_ohsmp", generate_ohsmp_node)
+builder.add_node("save_ohsmp", save_plan_node)
+builder.add_node("generate_tmp", generate_tmp_node)
+builder.add_node("save_tmp", save_plan_node)
 
 builder.add_edge(START, "fetch_docs")
-builder.add_edge("fetch_docs", "generate_plan")
-builder.add_edge("generate_plan", "save_plan")
-from langgraph.types import interrupt
+builder.add_edge("fetch_docs", "generate_pqp")
+builder.add_edge("generate_pqp", "save_pqp")
+builder.add_edge("save_pqp", "generate_emp")
+builder.add_edge("generate_emp", "save_emp")
+builder.add_edge("save_emp", "generate_ohsmp")
+builder.add_edge("generate_ohsmp", "save_ohsmp")
+builder.add_edge("save_ohsmp", "generate_tmp")
+builder.add_edge("generate_tmp", "save_tmp")
+builder.add_edge("save_tmp", END)
 
-def _pause_for_inspection(state: PlanGenerationState) -> PlanGenerationState:
-    interrupt("plan_generation: inspect state and resume to continue")
-    return state
-
-builder.add_node("pause_for_inspection", _pause_for_inspection)
-builder.add_edge("save_plan", "pause_for_inspection")
-builder.add_edge("pause_for_inspection", END)
-
-plan_generation_graph = builder.compile(checkpointer=True)
+plan_generation_graph = builder.compile()
 
 # Description: Subgraph that generates a project management plan JSON using Gemini structured output and saves it to projects table.
 
@@ -237,14 +283,11 @@ class SeqOutput(TypedDict):
 
 def seq_fetch_docs_node(state: SeqState) -> SeqState:
     # Use the txt_project_documents that were already extracted by document_extraction.py
-    # If not present, fall back to fetching from database
+    # Fail fast: do NOT fetch from database here
     if state.get("txt_project_documents"):
         # Already have extracted documents from document_extraction.py
         return {**state, "results": state.get("results", [])}
-    else:
-        # Fallback: fetch from database if no extracted documents available
-        docs = fetch_all_project_documents.invoke(state["project_id"])
-        return {**state, "txt_project_documents": docs, "results": []}
+    raise ValueError("txt_project_documents missing; sequencer requires upstream extraction (no DB fallback)")
 
 def _gen_and_save(plan_type: str, state: SeqState) -> Dict[str, Any]:
     docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
@@ -324,7 +367,7 @@ seq_builder.add_edge("gen_emp", "gen_ohsmp")
 seq_builder.add_edge("gen_ohsmp", "gen_tmp")
 seq_builder.add_edge("gen_tmp", END)
 
-plan_generation_sequencer_graph = seq_builder.compile(checkpointer=True)
+plan_generation_sequencer_graph = seq_builder.compile()
 
 # Convenience wrappers to run with only project_id
 def run_single_plan(project_id: str, plan_type: Optional[str] = None) -> Dict[str, Any]:
@@ -342,5 +385,5 @@ def run_all_plans(project_id: str) -> Dict[str, Any]:
 
 
 def create_plan_generation_graph():
-    """Factory exported for orchestrator integration (v10)."""
-    return builder.compile(checkpointer=True)
+    """Factory exported for orchestrator integration (v10). Returns single-plan subgraph (no checkpointer)."""
+    return builder.compile()

@@ -93,3 +93,7 @@ MANIFEST
 
 # Stripe
 .stripe/
+
+# LangGraph
+services/langgraph_v10/.langgraph_api/
+*.pckl

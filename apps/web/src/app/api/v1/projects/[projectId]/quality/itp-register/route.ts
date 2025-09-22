@@ -17,7 +17,7 @@ export async function GET(
     const status = searchParams.get('status')
     const wbsNode = searchParams.get('wbs_node')
 
-    // Build the query to get ITP register data
+    // Build the query to get ITP register data (documents only) and join template document number if referenced
     let query = `
       SELECT
         a.id,
@@ -29,36 +29,18 @@ export async function GET(
         a.created_at,
         a.updated_at,
         a.content,
-        COALESCE(a.content->>'wbs_node', '') as wbs_node,
-        COALESCE(a.content->>'lbs_node', '') as lbs_node,
-        COALESCE((a.content->>'item_count')::int, 0) as item_count,
-        COALESCE((a.content->>'completed_items')::int, 0) as completed_items,
-        -- Count related inspection points
-        (
-          SELECT COUNT(*)
-          FROM asset_edges ae
-          JOIN assets ip ON ip.id = ae.to_asset_id
-          WHERE ae.from_asset_id = a.id
-            AND ae.edge_type IN ('REFERENCES', 'IMPLEMENTS')
-            AND ip.type = 'inspection_point'
-        ) as inspection_points_count,
-        -- Get latest approval info
-        (
-          SELECT json_build_object(
-            'approved_at', ae.properties->>'approved_at',
-            'approved_by', u.name,
-            'role', ae.properties->>'role_at_signing'
-          )
-          FROM asset_edges ae
-          JOIN auth.users u ON u.id::text = ae.to_asset_id
-          WHERE ae.from_asset_id = a.id
-            AND ae.edge_type = 'APPROVED_BY'
-          ORDER BY ae.created_at DESC
-          LIMIT 1
-        ) as latest_approval
+        t.document_number AS template_document_number
       FROM public.asset_heads a
-      WHERE a.project_id = $1
-        AND a.type IN ('itp_document', 'itp_template')
+      LEFT JOIN LATERAL (
+        SELECT t2.document_number
+        FROM public.asset_edges e2
+        JOIN public.asset_heads t2 ON t2.id = e2.to_asset_id AND t2.type = 'itp_template' AND t2.is_current AND NOT t2.is_deleted
+        WHERE e2.from_asset_id = a.id AND e2.edge_type IN ('REFERENCES','TEMPLATE_FOR','INSTANCE_OF')
+        ORDER BY e2.created_at DESC
+        LIMIT 1
+      ) t ON TRUE
+      WHERE a.project_id = $1::uuid
+        AND a.type = 'itp_document'
         AND a.is_current = true
         AND a.is_deleted = false
     `
@@ -84,25 +66,16 @@ export async function GET(
 
     const result = await pool.query(query, queryParams)
 
-    // Calculate summary statistics
-    const totalItems = result.rows.reduce((sum, row) => sum + (row.item_count || 0), 0)
-    const completedItems = result.rows.reduce((sum, row) => sum + (row.completed_items || 0), 0)
-
+    // Basic stats for header cards are no longer needed by client, but keep minimal totals if used elsewhere
     const stats = {
       total: result.rows.length,
       approved: result.rows.filter(row => row.approval_state === 'approved').length,
       pending: result.rows.filter(row => row.approval_state === 'pending_review').length,
       draft: result.rows.filter(row => row.status === 'draft').length,
-      rejected: result.rows.filter(row => row.approval_state === 'rejected').length,
-      totalItems,
-      completedItems,
-      completionRate: totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
+      completionRate: 0
     }
 
-    return NextResponse.json({
-      itpRegister: result.rows,
-      stats
-    })
+    return NextResponse.json({ itpRegister: result.rows, stats })
   } catch (error) {
     console.error('Error fetching ITP register:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

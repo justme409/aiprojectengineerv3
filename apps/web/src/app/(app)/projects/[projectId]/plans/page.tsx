@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import PlanDocumentSection from '@/components/features/plans/PlanDocumentSection'
 import {
   FileText,
   Shield,
@@ -294,6 +295,38 @@ export default function ProjectPlansPage() {
           </Button>
         </div>
       </div>
+
+    {/* Collapsible Plan Sections (QSE-style), default collapsed */}
+    <div className="space-y-6">
+      <PlanDocumentSection
+        projectId={projectId}
+        planType="pqp"
+        title={planTypes.pqp.title}
+        description={planTypes.pqp.description}
+        defaultExpanded={false}
+      />
+      <PlanDocumentSection
+        projectId={projectId}
+        planType="emp"
+        title={planTypes.emp.title}
+        description={planTypes.emp.description}
+        defaultExpanded={false}
+      />
+      <PlanDocumentSection
+        projectId={projectId}
+        planType="ohsmp"
+        title={planTypes.ohsmp.title}
+        description={planTypes.ohsmp.description}
+        defaultExpanded={false}
+      />
+      <PlanDocumentSection
+        projectId={projectId}
+        planType="tmp"
+        title={planTypes.tmp.title}
+        description={planTypes.tmp.description}
+        defaultExpanded={false}
+      />
+    </div>
 
       {/* Plan Types Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

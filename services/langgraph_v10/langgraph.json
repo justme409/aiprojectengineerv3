@@ -6,6 +6,7 @@
     "standards_extraction": "./src/agent/graphs/standards_extraction.py:create_standards_extraction_graph",
     "wbs_extraction": "./src/agent/graphs/wbs_extraction.py:create_wbs_extraction_graph",
     "itp_generation": "./src/agent/graphs/itp_generation.py:create_itp_generation_graph",
+    "itp_generation_rev2": "./src/agent/graphs/itp_generation_rev2.py:create_itp_generation_rev2_graph",
     "sampling_planner": "./src/agent/graphs/sampling_planner.py:create_sampling_planner_graph",
     "document_extraction": "./src/agent/graphs/document_extraction.py:create_document_extraction_graph",
     "metadata_generator": "./src/agent/graphs/metadata_generator.py:create_metadata_generator_graph",
@@ -16,7 +17,6 @@
     "plan_generation": "./src/agent/graphs/plan_generation_agent.py:create_plan_generation_graph",
     "project_details": "./src/agent/graphs/project_details.py:create_project_details_graph",
     "template_variant_selector": "./src/agent/graphs/template_variant_selector.py:create_template_variant_selector_graph",
-    "jurisdiction_resolver": "./src/agent/graphs/jurisdiction_resolver.py:create_jurisdiction_resolver_graph",
     "standards_resolver": "./src/agent/graphs/standards_resolver.py:create_standards_resolver_graph"
   },
   "env": ".env",

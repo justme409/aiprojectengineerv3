@@ -2,7 +2,6 @@ from typing import Dict, List, Any, Optional, Literal
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
 from agent.tools.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
-from langgraph.types import interrupt
 import os
 import logging
 from agent.prompts.lbs_extraction_prompt import LBS_EXTRACTION_PROMPT
@@ -161,18 +160,12 @@ def create_lbs_extraction_graph():
         "asset_specs": [create_lbs_asset_spec(state)]
     })
     graph.add_node("persist_assets", persist_lbs_to_database)
-    # Pause for inspection to expose subgraph state via checkpoint
-    def _pause_for_inspection(state: LbsExtractionState) -> Dict[str, Any]:
-        interrupt("lbs_extraction: inspect state and resume to continue")
-        return {}
-    graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow following V9 patterns
     graph.set_entry_point("generate_lot_cards")
     graph.add_edge("generate_lot_cards", "create_asset_spec")
     graph.add_edge("create_asset_spec", "persist_assets")
-    graph.add_edge("persist_assets", "pause_for_inspection")
-    graph.add_edge("pause_for_inspection", END)
+    graph.add_edge("persist_assets", END)
 
     return graph.compile(checkpointer=True)
 

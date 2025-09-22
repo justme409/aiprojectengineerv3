@@ -1,526 +1,617 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'next/navigation'
-import { Plus, Save, FileText, Edit, Trash2, Eye, Download, Upload, ArrowLeft } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  createColumnHelper,
+} from '@tanstack/react-table';
+import { cn } from '@/lib/utils';
+import RowAttachmentUploader from './RowAttachmentUploader';
+import { toast } from 'sonner';
 
-interface ITPItem {
-  id: string
-  code: string
-  title: string
-  description: string
-  pointType: 'hold' | 'witness' | 'surveillance' | 'record'
-  acceptanceCriteria: string
-  requiredRecords: string[]
-  slaHours: number
-  jurisdictionRules: string[]
-}
+const AutoResizingTextarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.ComponentProps<'textarea'>
+>(({ className, value, onChange, onBlur, ...props }, ref) => {
+  const internalRef = useRef<HTMLTextAreaElement>(null);
+  const combinedRef = ref || internalRef;
 
-interface ITPTemplate {
-  id: string
-  name: string
-  description: string
-  version: string
-  status: 'draft' | 'approved' | 'superseded'
-  items: ITPItem[]
-  applicabilityNotes: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface ItpTemplateEditorEnhancedProps {
-  templateId?: string
-  onSave?: (template: ITPTemplate) => void
-  onCancel?: () => void
-}
-
-export default function ItpTemplateEditorEnhanced({
-  templateId,
-  onSave,
-  onCancel
-}: ItpTemplateEditorEnhancedProps) {
-  const params = useParams()
-  const projectId = params.projectId as string
-
-  const [template, setTemplate] = useState<ITPTemplate>({
-    id: templateId || '',
-    name: '',
-    description: '',
-    version: '1.0',
-    status: 'draft',
-    items: [],
-    applicabilityNotes: '',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  })
-
-  const [loading, setLoading] = useState(!!templateId)
-  const [editingItem, setEditingItem] = useState<ITPItem | null>(null)
-  const [showItemForm, setShowItemForm] = useState(false)
-
-  const fetchTemplate = useCallback(async () => {
-    if (!templateId) return
-
-    try {
-      const response = await fetch(`/api/v1/itp?projectId=${projectId}&type=template`)
-      if (response.ok) {
-        const data = await response.json()
-        const templateData = data.itp.find((t: any) => t.id === templateId)
-
-        if (templateData) {
-          const itpTemplate: ITPTemplate = {
-            id: templateData.id,
-            name: templateData.name,
-            description: templateData.content?.description || '',
-            version: templateData.content?.version || '1.0',
-            status: templateData.status,
-            applicabilityNotes: templateData.content?.applicabilityNotes || '',
-            items: templateData.content?.items || [],
-            createdAt: templateData.created_at,
-            updatedAt: templateData.updated_at,
-          }
-          setTemplate(itpTemplate)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching template:', error)
-    } finally {
-      setLoading(false)
+  const autoResize = useCallback(() => {
+    const element = typeof combinedRef === 'function' ? null : (combinedRef as any)?.current;
+    if (element) {
+      element.style.height = 'auto';
+      element.style.height = element.scrollHeight + 'px';
     }
-  }, [templateId, projectId])
+  }, [combinedRef]);
 
   useEffect(() => {
-    if (templateId) {
-      fetchTemplate()
-    }
-  }, [fetchTemplate, templateId])
-
-  const handleSave = async () => {
-    try {
-      const content = {
-        description: template.description,
-        version: template.version,
-        applicabilityNotes: template.applicabilityNotes,
-        items: template.items
-      }
-
-      if (templateId) {
-        // Update existing template
-        const response = await fetch('/api/v1/itp', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: templateId,
-            content,
-            status: template.status
-          })
-        })
-
-        if (response.ok) {
-          console.log('Template updated successfully')
-        }
-      } else {
-        // Create new template
-        const response = await fetch('/api/v1/itp', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'itp_template',
-            name: template.name,
-            projectId,
-            content
-          })
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          setTemplate(prev => ({ ...prev, id: data.id }))
-          console.log('Template created successfully')
-        }
-      }
-
-      if (onSave) {
-        onSave(template)
-      }
-    } catch (error) {
-      console.error('Error saving template:', error)
-    }
-  }
-
-  const addItem = () => {
-    const newItem: ITPItem = {
-      id: `item-${Date.now()}`,
-      code: '',
-      title: '',
-      description: '',
-      pointType: 'record',
-      acceptanceCriteria: '',
-      requiredRecords: [],
-      slaHours: 24,
-      jurisdictionRules: [],
-    }
-    setEditingItem(newItem)
-    setShowItemForm(true)
-  }
-
-  const saveItem = () => {
-    if (!editingItem) return
-
-    if (template.items.find(item => item.id === editingItem.id)) {
-      // Update existing item
-      setTemplate(prev => ({
-        ...prev,
-        items: prev.items.map(item =>
-          item.id === editingItem.id ? editingItem : item
-        ),
-      }))
-    } else {
-      // Add new item
-      setTemplate(prev => ({
-        ...prev,
-        items: [...prev.items, editingItem],
-      }))
-    }
-
-    setEditingItem(null)
-    setShowItemForm(false)
-  }
-
-  const deleteItem = (itemId: string) => {
-    setTemplate(prev => ({
-      ...prev,
-      items: prev.items.filter(item => item.id !== itemId),
-    }))
-  }
-
-  const getPointTypeBadge = (pointType: string) => {
-    const variants = {
-      hold: 'destructive',
-      witness: 'default',
-      surveillance: 'secondary',
-      record: 'outline',
-    } as const
-
-    return (
-      <Badge variant={variants[pointType as keyof typeof variants]}>
-        {pointType}
-      </Badge>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
+    autoResize();
+  }, [value, autoResize]);
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          {onCancel && (
-            <Button variant="outline" onClick={onCancel}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-          )}
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              {templateId ? 'Edit ITP Template' : 'Create ITP Template'}
-            </h1>
-            <p className="text-gray-600 mt-1">Inspection and Test Plan Template Editor</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button onClick={handleSave}>
-            <Save className="w-4 h-4 mr-2" />
-            Save Template
-          </Button>
-        </div>
-      </div>
+    <textarea
+      ref={combinedRef as any}
+      className={cn('min-h-[24px] w-full resize-none overflow-hidden', className)}
+      value={value}
+      onChange={(e) => {
+        onChange?.(e);
+        autoResize();
+      }}
+      onBlur={(e) => {
+        onBlur?.(e);
+        autoResize();
+      }}
+      {...props}
+    />
+  );
+});
+AutoResizingTextarea.displayName = 'AutoResizingTextarea';
 
-      {/* Template Details */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Template Details</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Template Name
-              </label>
-              <Input
-                value={template.name}
-                onChange={(e) => setTemplate(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Enter template name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Version
-              </label>
-              <Input
-                value={template.version}
-                onChange={(e) => setTemplate(prev => ({ ...prev, version: e.target.value }))}
-                placeholder="e.g., 1.0"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
-            </label>
-            <Textarea
-              value={template.description}
-              onChange={(e) => setTemplate(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Describe the purpose and scope of this template"
-              rows={3}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Applicability Notes
-            </label>
-            <Textarea
-              value={template.applicabilityNotes}
-              onChange={(e) => setTemplate(prev => ({ ...prev, applicabilityNotes: e.target.value }))}
-              placeholder="When and where this template should be used"
-              rows={2}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ITP Items */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <div>
-              <CardTitle>Inspection Points</CardTitle>
-              <CardDescription>
-                Define the inspection and test points for this template
-              </CardDescription>
-            </div>
-            <Button onClick={addItem}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Inspection Point
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {template.items.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">No inspection points yet</h3>
-              <p className="text-gray-600 mb-4">
-                Add inspection and test points to define your ITP template
-              </p>
-              <Button onClick={addItem}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add First Point
-              </Button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>SLA (hours)</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {template.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono text-sm">{item.code}</TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{item.title}</div>
-                        <div className="text-sm text-gray-600">{item.description}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getPointTypeBadge(item.pointType)}</TableCell>
-                    <TableCell>{item.slaHours}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setEditingItem(item)
-                            setShowItemForm(true)
-                          }}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deleteItem(item.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Item Edit Form Modal */}
-      {showItemForm && editingItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingItem.id.startsWith('item-') ? 'Add Inspection Point' : 'Edit Inspection Point'}
-                </h2>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowItemForm(false)
-                    setEditingItem(null)
-                  }}
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Code
-                  </label>
-                  <Input
-                    value={editingItem.code}
-                    onChange={(e) => setEditingItem(prev => prev ? { ...prev, code: e.target.value } : null)}
-                    placeholder="e.g., CF-001"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Point Type
-                  </label>
-                  <select
-                    value={editingItem.pointType}
-                    onChange={(e) => setEditingItem(prev => prev ? { ...prev, pointType: e.target.value as any } : null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="record">Record</option>
-                    <option value="surveillance">Surveillance</option>
-                    <option value="witness">Witness</option>
-                    <option value="hold">Hold</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title
-                </label>
-                <Input
-                  value={editingItem.title}
-                  onChange={(e) => setEditingItem(prev => prev ? { ...prev, title: e.target.value } : null)}
-                  placeholder="Inspection point title"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <Textarea
-                  value={editingItem.description}
-                  onChange={(e) => setEditingItem(prev => prev ? { ...prev, description: e.target.value } : null)}
-                  placeholder="Describe what this inspection point covers"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Acceptance Criteria
-                </label>
-                <Textarea
-                  value={editingItem.acceptanceCriteria}
-                  onChange={(e) => setEditingItem(prev => prev ? { ...prev, acceptanceCriteria: e.target.value } : null)}
-                  placeholder="What constitutes acceptable completion"
-                  rows={2}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    SLA Hours
-                  </label>
-                  <Input
-                    type="number"
-                    value={editingItem.slaHours}
-                    onChange={(e) => setEditingItem(prev => prev ? { ...prev, slaHours: parseInt(e.target.value) || 24 } : null)}
-                    placeholder="24"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Required Records
-                  </label>
-                  <Input
-                    value={editingItem.requiredRecords.join(', ')}
-                    onChange={(e) => setEditingItem(prev => prev ? {
-                      ...prev,
-                      requiredRecords: e.target.value.split(',').map(s => s.trim()).filter(s => s)
-                    } : null)}
-                    placeholder="Certificate, Checklist, Report"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowItemForm(false)
-                    setEditingItem(null)
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button onClick={saveItem}>
-                  {editingItem.id.startsWith('item-') ? 'Add Point' : 'Save Changes'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+interface ItpItem {
+  id: string;
+  item_no: string;
+  parentId: string | null;
+  thinking?: string | null;
+  section_name?: string | null;
+  'Inspection/Test Point'?: string | null;
+  'Acceptance Criteria'?: string | null;
+  'Specification Clause'?: string | null;
+  'Inspection/Test Method'?: string | null;
+  Frequency?: string | null;
+  Responsibility?: string | null;
+  'Hold/Witness Point'?: string | null;
+  attachments?: any[] | null;
 }
+
+interface TemplateData {
+  id: string;
+  name: string | null;
+  version: string | null;
+  status: string | null;
+  content?: ItpItem[] | { items?: ItpItem[]; [key: string]: any };
+}
+
+export function ItpTemplateEditorEnhanced({
+  templateData,
+  projectId,
+  templateId,
+  onDataChange,
+  disabled = false,
+}: {
+  templateData: TemplateData;
+  projectId: string;
+  templateId: string;
+  onDataChange?: (hasChanges: boolean, data: TemplateData) => void;
+  disabled?: boolean;
+}) {
+  const [data, setData] = useState(templateData);
+  const [originalData, setOriginalData] = useState(templateData);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [committing, setCommitting] = useState(false);
+  const [rowAttachments, setRowAttachments] = useState<Record<string, any[]>>({});
+
+  const [columnSizingState, setColumnSizingState] = useState<Record<string, number>>(() => {
+    try {
+      if (typeof window === 'undefined') return {} as any;
+      const saved = window.localStorage.getItem('itpTableSizingPreferences');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {} as any;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (Object.keys(columnSizingState as any).length > 0) {
+      window.localStorage.setItem('itpTableSizingPreferences', JSON.stringify(columnSizingState));
+    }
+  }, [columnSizingState]);
+
+  useEffect(() => {
+    const hasChanges = JSON.stringify(data) !== JSON.stringify(originalData);
+    setHasUnsavedChanges(hasChanges);
+    onDataChange?.(hasChanges, data);
+  }, [data, originalData, onDataChange]);
+
+  const rows = React.useMemo(() => {
+    if (!data.content) return [] as any[];
+    const contentObj = data.content as any;
+
+    // Extract items from the correct path: content.itp_items
+    let items: ItpItem[] = [];
+    if (Array.isArray(contentObj.itp_items)) {
+      items = contentObj.itp_items as ItpItem[];
+    } else if (Array.isArray(contentObj.items)) {
+      items = contentObj.items as ItpItem[];
+    } else if (Array.isArray(contentObj)) {
+      // Fallback: direct array
+      items = contentObj as ItpItem[];
+    }
+
+    return items.map((item, index) => ({
+      id: item.id,
+      isSection: item.parentId === null,
+      item: {
+        ...item,
+        // Map database field names to display field names
+        'Inspection/Test Point': item.inspection_test_point || item.inspection_test_point,
+        'Acceptance Criteria': item.acceptance_criteria,
+        'Specification Clause': item.specification_clause,
+        'Inspection/Test Method': item.inspection_test_method,
+        'Hold/Witness Point': item.hold_witness_point,
+        Frequency: item.frequency,
+        Responsibility: item.responsibility,
+      },
+      originalIndex: index,
+    }));
+  }, [data]);
+
+  const updateItemById = useCallback((itemId: string, updater: (prev: ItpItem) => ItpItem) => {
+    setData(prevData => {
+      if (!prevData.content) return prevData;
+
+      const contentObj = prevData.content as any;
+      let items: ItpItem[] = [];
+
+      // Get items from the correct path
+      if (Array.isArray(contentObj.itp_items)) {
+        items = contentObj.itp_items as ItpItem[];
+      } else if (Array.isArray(contentObj.items)) {
+        items = contentObj.items as ItpItem[];
+      } else if (Array.isArray(contentObj)) {
+        items = contentObj as ItpItem[];
+      }
+
+      const newItems = items.map(item => item.id === itemId ? updater(item) : item);
+
+      // Update the correct path in content
+      if (Array.isArray(contentObj.itp_items)) {
+        return { ...prevData, content: { ...contentObj, itp_items: newItems } };
+      } else if (Array.isArray(contentObj.items)) {
+        return { ...prevData, content: { ...contentObj, items: newItems } };
+      } else if (Array.isArray(contentObj)) {
+        return { ...prevData, content: newItems };
+      }
+
+      return prevData;
+    });
+  }, []);
+
+  const handleCellUpdate = useCallback((itemId: string, field: string, value: string) => {
+    updateItemById(itemId, (prev) => ({ ...prev, [field]: value } as any));
+  }, [updateItemById]);
+
+  const handleAttachmentChange = useCallback((rowId: string, attachments: any[]) => {
+    setRowAttachments(prev => {
+      const current = prev[rowId] || [];
+      if (JSON.stringify(current) === JSON.stringify(attachments)) {
+        return prev;
+      }
+      return { ...prev, [rowId]: attachments };
+    });
+    setHasUnsavedChanges(true);
+
+    // Update the item with attachments
+    updateItemById(rowId, (prev) => ({ ...prev, attachments } as any));
+  }, [updateItemById]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Preserve original content shape: if object with itp_items, update itp_items; if array, save array
+      const contentForSave = Array.isArray(data.content)
+        ? data.content
+        : data.content && typeof data.content === 'object'
+          ? data.content
+          : [];
+      const result = await saveAssetContent({
+        assetId: templateId,
+        content: contentForSave as any,
+        projectId,
+      });
+
+      if (result.success) {
+        setOriginalData(data);
+        setHasUnsavedChanges(false);
+        toast.success('Changes saved successfully');
+      } else {
+        toast.error((result as any).message || 'Failed to save changes');
+      }
+    } catch (error) {
+      console.error('Save error:', error);
+      toast.error('An unexpected error occurred while saving');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    if (hasUnsavedChanges) {
+      toast.error('Please save your changes before creating a new revision');
+      return;
+    }
+
+    const changeLog = prompt('Enter a description of the changes for this revision:');
+    if (!changeLog?.trim()) {
+      toast.error('Change log is required to create a new revision');
+      return;
+    }
+
+    setCommitting(true);
+    try {
+      const result = await commitAssetRevision({
+        assetId: templateId,
+        projectId,
+        commitMessage: changeLog.trim(),
+        isApproval: false,
+      });
+
+      if ((result as any).success) {
+        toast.success('New revision created successfully');
+      } else {
+        toast.error((result as any).error || 'Failed to create new revision');
+      }
+    } catch (error) {
+      console.error('Commit error:', error);
+      toast.error('An unexpected error occurred while creating revision');
+    } finally {
+      setCommitting(false);
+    }
+  };
+
+  useEffect(() => {
+    const onSave = async () => {
+      await handleSave();
+    };
+    const onCommit = async () => {
+      await handleCommit();
+    };
+    document.addEventListener('itp:save', onSave as EventListener);
+    document.addEventListener('itp:commit', onCommit as EventListener);
+    return () => {
+      document.removeEventListener('itp:save', onSave as EventListener);
+      document.removeEventListener('itp:commit', onCommit as EventListener);
+    };
+  }, []);
+
+  const columnHelper = createColumnHelper<any>();
+
+  const columns = React.useMemo(() => [
+    columnHelper.accessor('id', {
+      id: 'itemNo',
+      header: 'Item No.',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return row.item.item_no;
+      },
+      size: 80,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'inspectionPoint',
+      header: 'Inspection/Test Point',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <EditableCell
+            value={row.item['Inspection/Test Point'] || ''}
+            onChange={(value) => handleCellUpdate(row.id, 'Inspection/Test Point', value)}
+            placeholder="Enter inspection/test point"
+          />
+        );
+      },
+      size: 250,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'acceptanceCriteria',
+      header: 'Acceptance Criteria',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <EditableCell
+            value={row.item['Acceptance Criteria'] || ''}
+            onChange={(value) => handleCellUpdate(row.id, 'Acceptance Criteria', value)}
+            placeholder="Enter acceptance criteria"
+          />
+        );
+      },
+      size: 300,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'specificationClause',
+      header: 'Specification/Clause',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <EditableCell
+            value={row.item['Specification Clause'] || ''}
+            onChange={(value) => handleCellUpdate(row.id, 'Specification Clause', value)}
+            placeholder="Enter specification"
+          />
+        );
+      },
+      size: 200,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'inspectionTestMethod',
+      header: 'Inspection/Test Method',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <EditableCell
+            value={row.item['Inspection/Test Method'] || ''}
+            onChange={(value) => handleCellUpdate(row.id, 'Inspection/Test Method', value)}
+            placeholder="Enter method"
+          />
+        );
+      },
+      size: 150,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'frequency',
+      header: 'Frequency',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <EditableCell
+            value={row.item.Frequency || ''}
+            onChange={(value) => handleCellUpdate(row.id, 'Frequency', value)}
+            placeholder="Enter frequency"
+          />
+        );
+      },
+      size: 120,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'responsibility',
+      header: 'Responsibility',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <EditableCell
+            value={row.item.Responsibility || ''}
+            onChange={(value) => handleCellUpdate(row.id, 'Responsibility', value)}
+            placeholder="Enter responsibility"
+          />
+        );
+      },
+      size: 120,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'holdWitness',
+      header: 'Hold/Witness Point',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <EditableCell
+            value={row.item['Hold/Witness Point'] || ''}
+            onChange={(value) => handleCellUpdate(row.id, 'Hold/Witness Point', value)}
+            placeholder="Enter hold/witness point"
+          />
+        );
+      },
+      size: 120,
+      enableResizing: true,
+    }),
+    columnHelper.accessor('id', {
+      id: 'attachments',
+      header: 'Attachments',
+      cell: info => {
+        const row = info.row.original;
+        if (row.isSection) return null;
+        return (
+          <RowAttachmentUploader
+            templateId={templateId}
+            rowId={row.id}
+            projectId={projectId}
+            onAttachmentsChange={(attachments) => handleAttachmentChange(row.id, attachments)}
+            disabled={disabled}
+          />
+        );
+      },
+      size: 120,
+      enableResizing: true,
+    }),
+  ], [handleCellUpdate, templateId, projectId, disabled]);
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    state: {
+      columnSizing: columnSizingState,
+    },
+    onColumnSizingChange: (updater) => {
+      if (typeof window === 'undefined') return // Prevent hydration issues
+      const next = typeof updater === 'function' ? (updater as any)(columnSizingState) : updater
+      // normalize widths to integers to avoid SSR hydration diffs
+      const normalized: Record<string, number> = {}
+      Object.entries(next || {}).forEach(([k, v]) => { normalized[k] = Math.round(Number(v) || 0) })
+      setColumnSizingState(normalized)
+    },
+    defaultColumn: {
+      minSize: 80,
+      maxSize: 1000,
+      size: 150,
+    },
+    columnResizeMode: 'onChange',
+    enableColumnResizing: true,
+  });
+
+  const isSectionRow = (row: any) => row.original.isSection;
+
+  const EditableCell = ({ value, onChange, placeholder }: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [cellValue, setCellValue] = useState(value || '');
+
+    useEffect(() => {
+      setCellValue(value || '');
+    }, [value]);
+
+    const handleBlur = () => {
+      setIsEditing(false);
+      onChange(cellValue);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleBlur();
+      }
+      if (e.key === 'Escape') {
+        setCellValue(value || '');
+        setIsEditing(false);
+      }
+    };
+
+    if (disabled) {
+      return (
+        <div className="w-full min-h-[24px] whitespace-pre-wrap py-1 text-gray-500">
+          {cellValue || <span className="text-gray-400 italic">No data</span>}
+        </div>
+      );
+    }
+
+    if (isEditing) {
+      return (
+        <AutoResizingTextarea
+          className="w-full h-auto bg-transparent border-0 focus:ring-0 resize-none overflow-hidden"
+          value={cellValue}
+          onChange={(e) => setCellValue(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          autoFocus
+        />
+      );
+    }
+
+    return (
+      <div
+        className="w-full min-h-[24px] cursor-text whitespace-pre-wrap py-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-1 transition-colors"
+        onClick={() => !disabled && setIsEditing(true)}
+      >
+        {cellValue || <span className="text-gray-400 italic">{placeholder || 'Click to edit'}</span>}
+      </div>
+    );
+  };
+
+  return (
+    <div className="bg-background rounded-lg shadow-sm w-full">
+      <table
+        className="w-full border-collapse"
+        style={{
+          width: typeof window !== 'undefined' ? Number(table.getTotalSize() || 0) : 1460,
+          minWidth: '100%'
+        }}
+        data-resizing={typeof window !== 'undefined' ? (Object.keys((table as any).getState().columnSizingInfo || {}).length > 0).toString() : 'false'}
+      >
+        <thead>
+          <tr>
+            {table.getFlatHeaders().map(header => (
+              <th
+                key={header.id}
+                className="bg-blue-700 dark:bg-muted text-white dark:text-primary-foreground font-medium border-r border-blue-600/20 dark:border-border text-left"
+                style={{
+                  width: typeof window !== 'undefined' ? header.getSize() : 120,
+                  position: 'relative',
+                  fontSize: '0.875rem',
+                  fontFamily: 'inherit',
+                  padding: '0.375rem 1rem',
+                  height: '32px'
+                }}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+                {header.column.getCanResize() && (
+                  <div
+                    onMouseDown={typeof window !== 'undefined' ? header.getResizeHandler() : undefined}
+                    onTouchStart={typeof window !== 'undefined' ? header.getResizeHandler() : undefined}
+                    className={`absolute top-0 right-0 h-full w-5 cursor-col-resize select-none touch-none z-10 ${typeof window !== 'undefined' && header.column.getIsResizing() ? 'bg-blue-500 dark:bg-accent resizing' : 'bg-blue-900 dark:bg-secondary opacity-0 hover:opacity-100'}`}
+                    data-resizer
+                    title="Resize column"
+                  />
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map(row => {
+            if (isSectionRow(row)) {
+              return (
+                <tr key={row.id} className="section-row">
+                  <td colSpan={columns.length} className="bg-muted font-semibold py-3 px-4 border-b dark:border-border dark:bg-[#252526]" style={{ fontSize: '0.875rem', fontFamily: 'inherit' }}>
+                    {row.original.item.section_name}
+                  </td>
+                </tr>
+              );
+            }
+            return (
+              <tr
+                key={row.id}
+                className={cn(
+                  'hover:bg-muted/50 dark:hover:bg-[#2a2d2e] transition-colors',
+                  typeof window !== 'undefined' && row.original.originalIndex % 2 === 0
+                    ? 'bg-background dark:bg-[#1e1e1e]'
+                    : 'bg-muted/30 dark:bg-[#202020]'
+                )}
+              >
+                {row.getVisibleCells().map(cell => (
+                  <td key={cell.id} className="align-top border-r dark:border-border px-4 py-3" style={{ verticalAlign: 'top', height: '100%', fontSize: '0.875rem', fontFamily: 'inherit' }}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <style jsx>{`
+        .cursor-col-resize { cursor: col-resize !important; }
+        table { border-spacing: 0; table-layout: fixed; }
+        .react-table-resizing { cursor: col-resize; }
+        table[data-resizing="true"] * { user-select: none; }
+        [data-resizer].resizing::after { content: ''; position: absolute; right: 0; top: 0; height: 100vh; width: 2px; background-color: var(--accent, #0e639c); z-index: 1; }
+        th:hover [data-resizer] { opacity: 0.5 !important; }
+        [data-resizer]:hover { opacity: 1 !important; background-color: var(--primary, #3b82f6) !important; }
+        [data-resizer] { position: absolute; right: 0; top: 0; height: 100%; width: 5px; cursor: col-resize; user-select: none; touch-action: none; }
+        th, td { box-sizing: border-box; position: relative; overflow: hidden; white-space: normal; }
+        tbody tr { min-height: fit-content; height: auto; }
+        td { min-height: 100%; height: auto; }
+        textarea { font-size: 0.875rem; font-family: inherit; line-height: 1.5; background-color: transparent; color: inherit; }
+        :global(.dark) textarea { color: var(--foreground); background-color: transparent; }
+        :global(.dark) table { color: var(--foreground); }
+        :global(.dark) th, :global(.dark) td { border-color: var(--border); }
+        :global(.dark) .section-row td { background-color: #252526; color: white; }
+        :global(.dark) tbody tr:nth-child(even) td { background-color: #1e1e1e; }
+        :global(.dark) tbody tr:nth-child(odd) td { background-color: #202020; }
+        :global(.dark) tbody tr:hover td { background-color: #2a2d2e; }
+        :global(.dark) thead th { background-color: #252526; color: white; }
+        :global(.dark) textarea:focus { background-color: rgba(14, 99, 156, 0.1); }
+      `}</style>
+    </div>
+  );
+}
+
+export default ItpTemplateEditorEnhanced;

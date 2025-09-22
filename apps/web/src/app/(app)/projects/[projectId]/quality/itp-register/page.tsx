@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -20,10 +19,6 @@ import {
   FileText,
   Search,
   Filter,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-  XCircle,
   Eye,
   Plus
 } from 'lucide-react'
@@ -31,53 +26,36 @@ import {
 interface ITPDocument {
   id: string
   name: string
-  documentNumber: string
-  revision: string
+  documentNumber: string | null
+  templateDocumentNumber: string | null
+  revision: string | null
   status: 'draft' | 'pending_review' | 'approved' | 'superseded'
   approvalState: 'not_required' | 'pending_review' | 'approved' | 'rejected' | 'changes_requested'
-  createdAt: string
-  updatedAt: string
-  wbsNode?: string
-  lbsNode?: string
-  itemCount: number
-  completedItems: number
 }
 
-interface ITPStats {
-  total: number
-  approved: number
-  pending: number
-  draft: number
-  completionRate: number
-}
+// Removed stats UI; keep no client stats state
 
 export default function ITPRegisterPage() {
   const params = useParams()
   const projectId = params.projectId as string
   const [documents, setDocuments] = useState<ITPDocument[]>([])
   const [filteredDocuments, setFilteredDocuments] = useState<ITPDocument[]>([])
-  const [stats, setStats] = useState<ITPStats>({
-    total: 0,
-    approved: 0,
-    pending: 0,
-    draft: 0,
-    completionRate: 0
-  })
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('updated')
+  const [sortBy, setSortBy] = useState('name')
 
   useEffect(() => {
     const fetchITPDocuments = async () => {
       try {
         setLoading(true)
-        // Fetch ITP documents and templates from assets
-        const response = await fetch(`/api/v1/assets?project_id=${projectId}&type=itp_document&type=itp_template`)
+        // Use dedicated register API that returns both itp_document and itp_template
+        const response = await fetch(`/api/v1/projects/${projectId}/quality/itp-register`)
         if (response.ok) {
           const data = await response.json()
-          console.log('ITP Documents API Response:', data)
-          setDocuments(data.assets || [])
+          const rows = (data.itpRegister || []) as any[]
+          const transformed = transformAssetsToITPDocs(rows)
+          setDocuments(transformed)
         } else {
           console.error('API response not ok:', response.status, response.statusText)
         }
@@ -97,15 +75,17 @@ export default function ITPRegisterPage() {
 
       // Apply search filter
       if (searchTerm) {
+        const term = searchTerm.toLowerCase()
         filtered = filtered.filter(doc =>
-          doc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          doc.documentNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+          (doc.name || '').toLowerCase().includes(term) ||
+          (doc.documentNumber || '').toLowerCase().includes(term) ||
+          (doc.templateDocumentNumber || '').toLowerCase().includes(term)
         )
       }
 
       // Apply status filter
       if (statusFilter !== 'all') {
-        filtered = filtered.filter(doc => doc.status === statusFilter)
+        filtered = filtered.filter(doc => doc.approvalState === statusFilter)
       }
 
       // Apply sorting
@@ -114,10 +94,13 @@ export default function ITPRegisterPage() {
           case 'name':
             return (a.name || '').localeCompare(b.name || '')
           case 'status':
-            return (a.status || '').localeCompare(b.status || '')
-          case 'updated':
+            return (a.approvalState || '').localeCompare(b.approvalState || '')
+          case 'template':
+            return (a.templateDocumentNumber || '').localeCompare(b.templateDocumentNumber || '')
+          case 'revision':
+            return (a.revision || '').localeCompare(b.revision || '')
           default:
-            return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime()
+            return (a.name || '').localeCompare(b.name || '')
         }
       })
 
@@ -132,73 +115,30 @@ export default function ITPRegisterPage() {
     return assets.map(asset => ({
       id: asset.id,
       name: asset.name,
-      documentNumber: asset.document_number || 'N/A',
-      revision: asset.revision_code || '1',
+      documentNumber: asset.document_number ?? null,
+      templateDocumentNumber: asset.template_document_number ?? asset.content?.template_document_number ?? null,
+      revision: asset.revision_code ?? null,
       status: asset.status,
       approvalState: asset.approval_state,
-      createdAt: asset.created_at,
-      updatedAt: asset.updated_at,
-      wbsNode: asset.content?.wbs_node,
-      lbsNode: asset.content?.lbs_node,
-      itemCount: asset.content?.item_count || 0,
-      completedItems: asset.content?.completed_items || 0
     }))
   }
 
-  const calculateStats = (docs: ITPDocument[]) => {
-    const total = docs.length
-    const approved = docs.filter(doc => doc.approvalState === 'approved').length
-    const pending = docs.filter(doc => doc.approvalState === 'pending_review').length
-    const draft = docs.filter(doc => doc.status === 'draft').length
-    const totalItems = docs.reduce((sum, doc) => sum + doc.itemCount, 0)
-    const completedItems = docs.reduce((sum, doc) => sum + doc.completedItems, 0)
-    const completionRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
-
-    setStats({
-      total,
-      approved,
-      pending,
-      draft,
-      completionRate
-    })
-  }
+  // Removed stats calculation
 
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      draft: 'secondary',
-      pending_review: 'outline',
-      approved: 'default',
-      rejected: 'destructive',
-      superseded: 'secondary'
-    } as const
-
-    const labels = {
+  const getStatusText = (status: string) => {
+    const labels: Record<string, string> = {
       draft: 'Draft',
       pending_review: 'Pending Review',
       approved: 'Approved',
       rejected: 'Rejected',
-      superseded: 'Superseded'
+      superseded: 'Superseded',
+      not_required: 'Not Required'
     }
-
-    return (
-      <Badge variant={variants[status as keyof typeof variants] || 'secondary'}>
-        {labels[status as keyof typeof labels] || status}
-      </Badge>
-    )
+    return labels[status] || status
   }
 
-  const getProgressBar = (completed: number, total: number) => {
-    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0
-    return (
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div
-          className="bg-primary h-2 rounded-full"
-          style={{ width: `${percentage}%` }}
-        ></div>
-      </div>
-    )
-  }
+  // Removed progress bar UI
 
   if (loading) {
     return (
@@ -236,58 +176,7 @@ export default function ITPRegisterPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total ITPs</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approved</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.approved}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Draft</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-gray-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-gray-600">{stats.draft}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completion</CardTitle>
-            <CheckCircle className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">{stats.completionRate}%</div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Stats removed; keeping only header and filters */}
 
       {/* Filters */}
       <Card>
@@ -338,55 +227,25 @@ export default function ITPRegisterPage() {
       <Card>
         <CardHeader>
           <CardTitle>ITP Documents</CardTitle>
-          <CardDescription>
-            {filteredDocuments.length} of {documents.length} documents
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Document</TableHead>
+                <TableHead>ITP Name</TableHead>
+                <TableHead>Template Number</TableHead>
+                <TableHead>Revision</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>WBS/LBS</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Last Updated</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredDocuments.map((doc) => (
                 <TableRow key={doc.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{doc.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {doc.documentNumber} (Rev {doc.revision})
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(doc.approvalState)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      {doc.wbsNode && <div>WBS: {doc.wbsNode}</div>}
-                      {doc.lbsNode && <div>LBS: {doc.lbsNode}</div>}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <div className="text-sm">
-                        {doc.completedItems}/{doc.itemCount} items
-                      </div>
-                      {getProgressBar(doc.completedItems, doc.itemCount)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm text-muted-foreground">
-                      {new Date(doc.updatedAt).toLocaleDateString()}
-                    </div>
-                  </TableCell>
+                  <TableCell className="font-medium">{doc.name}</TableCell>
+                  <TableCell>{doc.templateDocumentNumber || '-'}</TableCell>
+                  <TableCell>{doc.revision || '-'}</TableCell>
+                  <TableCell>{getStatusText(doc.approvalState)}</TableCell>
                   <TableCell>
                     <Link href={`/projects/${projectId}/quality/itp/${doc.id}`}>
                       <Button variant="outline" size="sm">

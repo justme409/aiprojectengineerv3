@@ -1,4 +1,13 @@
+"use client";
+import * as React from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Download, FileText, CheckCircle2 } from 'lucide-react'
+import RevisionSelector from '@/components/features/itp/RevisionSelector'
+import RevisionComparison from '@/components/features/itp/RevisionComparison'
+import { toast } from 'sonner'
+import ItpTemplateEditorEnhanced from '@/components/features/itp/ItpTemplateEditorEnhanced'
 
 interface ItpTemplateDetailClientProps {
   template: any
@@ -14,7 +23,10 @@ export default function ItpTemplateDetailClient({
   template,
   projectId,
   templateId,
-  projectName
+  projectName,
+  lot,
+  lotId,
+  isClientPortal = false
 }: ItpTemplateDetailClientProps) {
   if (!template) {
     return (
@@ -22,136 +34,97 @@ export default function ItpTemplateDetailClient({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center py-12">
             <h3 className="text-lg font-semibold mb-2">Template Not Found</h3>
-            <p className="text-muted-foreground">
-              The requested ITP template could not be found.
-            </p>
+            <p className="text-muted-foreground">The requested ITP template could not be found.</p>
           </div>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Link
-            href={`/projects/${projectId}/quality/itp-templates`}
-            className="text-sm text-muted-foreground hover:underline flex items-center mb-4"
-          >
-            ← Back to ITP Templates for {projectName}
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900">
-            {template.name}
-          </h1>
-          <p className="text-gray-600 mt-2">
-            ITP template details and inspection/test plan items.
-          </p>
-        </div>
+  const actualTemplateId = templateId
+  const [currentRevision, setCurrentRevision] = React.useState<string>((template?.content?.revision || template?.version) || 'A')
+  const [comparisonOpen, setComparisonOpen] = React.useState(false)
+  const [submitting, setSubmitting] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false)
+  const [templateData, setTemplateData] = React.useState(template)
 
-        <div className="space-y-6">
-          {/* Template Overview */}
-          <div className="bg-white rounded-lg shadow-sm border">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-semibold text-gray-900">{template.name}</h2>
-              <div className="flex items-center space-x-2 mt-2">
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  template.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
-                  template.status === 'approved' ? 'bg-green-100 text-green-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {template.status}
-                </span>
-                {template.content?.version && (
-                  <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-                    Version {template.content.version}
-                  </span>
-                )}
+  return (
+    <div className="flex flex-col min-h-screen bg-background overflow-x-hidden">
+      <div className="px-8 py-6 border-b dark:border-border">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-24 h-12 bg-[#1e3a8a] dark:bg-primary flex items-center justify-center text-white font-bold text-xs">
+              AI PROJECT<br/>ENGINEER
+            </div>
+          </div>
+          <div className="text-right">
+            <h1 className="text-primary text-2xl font-semibold mb-1">Inspection & Test Procedure</h1>
+            <div className="text-muted-foreground">{templateData.name || 'Untitled Template'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-8 py-3 bg-muted/50 dark:bg-muted border-b dark:border-border">
+        <div className="flex justify-between items-start gap-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-4">
+              <h2 className="font-semibold text-lg">ITP: {templateData.name || 'Untitled Template'}</h2>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Badge variant={templateData.status === 'approved' ? 'default' : templateData.status === 'pending_client_approval' ? 'secondary' : 'outline'}>
+                  {templateData.status || 'draft'}
+                </Badge>
               </div>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <p><strong>Project:</strong> {projectName}</p>
-                  <p><strong>Status:</strong> {template.status}</p>
-                  <p><strong>Created:</strong> {new Date(template.created_at).toLocaleDateString()}</p>
-                  <p><strong>Last Updated:</strong> {new Date(template.updated_at).toLocaleDateString()}</p>
-                </div>
-              </div>
-
-              {template.content?.description && (
-                <>
-                  <div className="border-t pt-4">
-                    <h3 className="font-semibold text-lg mb-2">Description</h3>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {template.content.description}
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {template.content?.applicability_notes && (
-                <>
-                  <div className="border-t pt-4">
-                    <h3 className="font-semibold text-lg mb-2">Applicability Notes</h3>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {template.content.applicability_notes}
-                    </p>
-                  </div>
-                </>
-              )}
+            <div className="flex items-center gap-4">
+              <RevisionSelector
+                templateId={actualTemplateId}
+                currentRevision={currentRevision}
+                onRevisionChange={(r) => setCurrentRevision(r)}
+                onCompareRevisions={() => setComparisonOpen(true)}
+                disabled={submitting}
+                hasUnsavedChanges={hasUnsavedChanges}
+              />
             </div>
           </div>
 
-          {/* ITP Items */}
-          {template.content?.items && template.content.items.length > 0 && (
-            <div className="bg-white rounded-lg shadow-sm border">
-              <div className="p-6 border-b">
-                <h2 className="text-xl font-semibold text-gray-900">Inspection and Test Plan Items</h2>
-                <p className="text-gray-600 mt-1">
-                  {template.content.items.length} items in this ITP template
-                </p>
-              </div>
-              <div className="p-6">
-                <div className="space-y-4">
-                  {template.content.items.map((item: any, index: number) => (
-                    <div key={item.id || index} className="border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-gray-900">
-                          {item.code}: {item.title}
-                        </h4>
-                        <span className={`px-2 py-1 text-xs font-medium rounded ${
-                          item.point_type === 'hold' ? 'bg-red-100 text-red-800' :
-                          item.point_type === 'witness' ? 'bg-blue-100 text-blue-800' :
-                          item.point_type === 'surveillance' ? 'bg-purple-100 text-purple-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
-                          {item.point_type}
-                        </span>
-                      </div>
-                      {item.description && (
-                        <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-                      )}
-                      {item.acceptance_criteria && (
-                        <div className="text-sm">
-                          <strong>Acceptance Criteria:</strong> {item.acceptance_criteria}
-                        </div>
-                      )}
-                      {item.required_records && item.required_records.length > 0 && (
-                        <div className="text-sm mt-2">
-                          <strong>Required Records:</strong> {item.required_records.join(', ')}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" className="gap-2" disabled={exporting}>
+              <Download className="h-4 w-4" />
+              {exporting ? 'Exporting...' : 'Export'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 p-8 overflow-y-auto">
+        <div className="bg-background rounded-lg shadow-sm border w-full">
+          {templateData?.content && (
+            <div className="overflow-x-auto">
+              <ItpTemplateEditorEnhanced
+                templateData={{
+                  ...templateData,
+                  // Pass through original content so the editor can read either `itp_items` or `items`
+                  content: templateData.content as any,
+                }}
+                projectId={projectId}
+                templateId={actualTemplateId}
+                disabled={false}
+                onDataChange={(hasChanges) => setHasUnsavedChanges(hasChanges)}
+              />
             </div>
           )}
         </div>
       </div>
+
+      <div className="px-8 py-4 border-t bg-muted/50 dark:bg-muted dark:border-border">
+        <div className="flex justify-between text-sm text-muted-foreground">
+          <div>Page 1 of 1</div>
+          <div>{template.name || 'Untitled Template'}</div>
+        </div>
+      </div>
+
+      <RevisionComparison templateId={actualTemplateId} isOpen={comparisonOpen} onClose={() => setComparisonOpen(false)} />
     </div>
   )
 }

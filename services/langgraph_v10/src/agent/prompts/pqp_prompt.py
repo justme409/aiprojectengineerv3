@@ -18,6 +18,8 @@ QSE system usage (critical):
 
 Use the most relevant jurisdictional template below (QLD, SA, VIC, NSW). If none applies, use the Generic template. Populate and expand sections based on PROJECT DOCUMENTS. Do not include any instructional text in the output; return only the final plan object.
 
+ITP Handling: When extracting lists of ITPs (Inspection and Test Plans), copy them exactly from the supplied PROJECT DOCUMENTS list. Maintain a 1:1 correspondence - do not combine items, do not leave any out, and preserve the original structure and content as provided.
+
 --- TEMPLATE: QLD (MRTS50 – Specific Quality System Requirements) ---
 {
   "title": "Queensland Project Quality Plan (PQP) — Layout (MRTS50)",

@@ -1,17 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getProjectById } from "@/lib/actions/project-actions";
-import { getItpTemplateById } from "@/lib/actions/lot-actions";
+import { getAssetById } from "@/lib/actions/asset-actions";
 import ItpTemplateDetailClient from "@/components/features/itp/ItpTemplateDetailClient";
 
-type ItpTemplateDetailPageProps = {
-  params: Promise<{
-    projectId: string;
-    templateId: string;
-  }>;
-};
-
-export default async function ItpTemplateDetailPage({ params }: ItpTemplateDetailPageProps) {
+export default async function ItpTemplateDetailPage({ params }: { params: Promise<{ projectId: string; templateId: string }> }) {
   const { projectId, templateId } = await params;
 
   const session = await auth();
@@ -27,20 +20,17 @@ export default async function ItpTemplateDetailPage({ params }: ItpTemplateDetai
     notFound();
   }
 
-  const templateResult = await getItpTemplateById(templateId);
-  if (!templateResult.success || !templateResult.data || templateResult.data.project_id !== projectId) {
+  const template = await getAssetById(templateId);
+  if (!template || template.project_id !== projectId || !['itp_template', 'itp_document'].includes(template.type)) {
     notFound();
   }
-
-  const template = templateResult.data as any;
-  const projectName = project.name || 'Project';
 
   return (
     <ItpTemplateDetailClient
       template={template}
       projectId={projectId}
       templateId={templateId}
-      projectName={projectName}
+      projectName={project.name}
     />
   );
 }
