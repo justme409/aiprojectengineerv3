@@ -30,7 +30,7 @@ export default async function ItpTemplatesPage({ params }: ItpTemplatesPageProps
 
   // Fetch ITP templates for the project from asset_heads; treat both 'itp_template' and 'itp_document' as templates
   const { rows } = await query(
-    `SELECT id, name, status, content
+    `SELECT id, name, status, content, document_number
      FROM public.asset_heads
      WHERE project_id = $1 AND type IN ('itp_template','itp_document')
      ORDER BY updated_at DESC`,
@@ -41,6 +41,7 @@ export default async function ItpTemplatesPage({ params }: ItpTemplatesPageProps
     name: t.name,
     version: t.content?.version || null,
     status: t.status,
+    document_number: t.document_number || null,
   }))
 
   return (

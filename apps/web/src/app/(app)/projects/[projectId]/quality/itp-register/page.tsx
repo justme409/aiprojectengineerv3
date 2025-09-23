@@ -233,7 +233,7 @@ export default function ITPRegisterPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>ITP Name</TableHead>
-                <TableHead>Template Number</TableHead>
+                <TableHead>ITP Number</TableHead>
                 <TableHead>Revision</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
@@ -243,7 +243,7 @@ export default function ITPRegisterPage() {
               {filteredDocuments.map((doc) => (
                 <TableRow key={doc.id}>
                   <TableCell className="font-medium">{doc.name}</TableCell>
-                  <TableCell>{doc.templateDocumentNumber || '-'}</TableCell>
+                  <TableCell>{doc.documentNumber || '-'}</TableCell>
                   <TableCell>{doc.revision || '-'}</TableCell>
                   <TableCell>{getStatusText(doc.approvalState)}</TableCell>
                   <TableCell>
@@ -276,4 +276,3 @@ export default function ITPRegisterPage() {
     </div>
   )
 }
-

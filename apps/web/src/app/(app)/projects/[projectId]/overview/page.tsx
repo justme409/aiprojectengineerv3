@@ -63,11 +63,9 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 					<div><strong>Client:</strong> {enrichedProject.displayClient}</div>
 					<div><strong>Location:</strong> {projectAsset?.content?.project_address || projectAsset?.content?.location || project.location}</div>
 					<div><strong>State/Territory:</strong> {projectAsset?.content?.state_territory}</div>
-					<div><strong>Local Council:</strong> {projectAsset?.content?.local_council}</div>
-					<div><strong>Regulatory Framework:</strong> {projectAsset?.content?.regulatory_framework}</div>
-					{projectAsset?.content?.html && (
-						<div><Link href={`/projects/${projectId}/details`} className="text-primary hover:underline">View Details</Link></div>
-					)}
+                    <div><strong>Local Council:</strong> {projectAsset?.content?.local_council}</div>
+                    {/* <div><strong>Regulatory Framework:</strong> {projectAsset?.content?.regulatory_framework}</div> */}
+                    {/* Project details link moved to Documents section */}
 				</div>
 			</div>
 
@@ -99,21 +97,28 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 				</Card>
 
 				{/* Documents (only item left from original core) */}
-				<Card>
-					<CardHeader>
-						<CardTitle>Documents</CardTitle>
-						<CardDescription>All project documentation</CardDescription>
-					</CardHeader>
-					<CardContent className="space-y-3">
-						<Link href={`/projects/${projectId}/documents`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<FileText className="mr-2 h-4 w-4" />
-								Documents
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
-					</CardContent>
-				</Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Documents</CardTitle>
+                        <CardDescription>All project documentation</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <Link href={`/projects/${projectId}/documents`}>
+                            <Button variant="ghost" className="w-full justify-start">
+                                <FileText className="mr-2 h-4 w-4" />
+                                Documents
+                                <ChevronRight className="ml-auto h-4 w-4" />
+                            </Button>
+                        </Link>
+                        <Link href={`/projects/${projectId}/settings`}>
+                            <Button variant="ghost" className="w-full justify-start">
+                                <FileText className="mr-2 h-4 w-4" />
+                                Project Details
+                                <ChevronRight className="ml-auto h-4 w-4" />
+                            </Button>
+                        </Link>
+                    </CardContent>
+                </Card>
 
 				{/* Quality */}
 				<Card>
@@ -150,13 +155,7 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
 								<ChevronRight className="ml-auto h-4 w-4" />
 							</Button>
 						</Link>
-						<Link href={`/projects/${projectId}/tests`}>
-							<Button variant="ghost" className="w-full justify-start">
-								<FileText className="mr-2 h-4 w-4" />
-								Tests
-								<ChevronRight className="ml-auto h-4 w-4" />
-							</Button>
-						</Link>
+                        {/* Tests temporarily removed */}
 						{showPrimaryTesting && (
 							<Link href={`/projects/${projectId}/quality/primary-testing`}>
 								<Button variant="ghost" className="w-full justify-start">

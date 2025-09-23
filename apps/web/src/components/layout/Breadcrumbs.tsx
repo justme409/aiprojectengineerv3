@@ -29,6 +29,35 @@ export function Breadcrumbs() {
 
     // Handle different routes
     switch (pathSegments[0]) {
+      case 'portal': {
+        // /portal/projects/:projectId/... (client portal)
+        breadcrumbs.push({ label: 'Client Portal', href: '/portal' })
+        if (pathSegments[1] === 'projects' && pathSegments[2]) {
+          const projectId = pathSegments[2]
+          // Portal project dashboard as root
+          breadcrumbs.push({ label: 'Projects', href: '/portal/projects' })
+          breadcrumbs.push({ label: 'Overview', href: `/portal/projects/${projectId}/dashboard`, isActive: !pathSegments[3] })
+
+          if (pathSegments[3]) {
+            const sub = pathSegments.slice(3).join('/')
+            const map: Record<string, string> = {
+              'documents': 'Documents',
+              'pending-approvals': 'Pending Approvals',
+              'management-plans': 'Management Plans',
+              'wbs': 'WBS',
+              'lots': 'Lots',
+              'itp-templates': 'ITP Templates',
+              'details': 'Details'
+            }
+            const label = map[pathSegments[3]] || pathSegments[3]
+            breadcrumbs[breadcrumbs.length - 1].isActive = false
+            breadcrumbs.push({ label, href: `/portal/projects/${projectId}/${sub}`, isActive: true })
+          }
+        } else {
+          breadcrumbs[breadcrumbs.length - 1].isActive = true
+        }
+        break
+      }
       case 'projects':
         breadcrumbs.push({ label: 'Projects', href: '/projects' })
 
@@ -66,6 +95,9 @@ export function Breadcrumbs() {
                 // ITP Templates list page
                 breadcrumbs[breadcrumbs.length - 1].isActive = true
               }
+            } else if (pathSegments[2] === 'quality' && pathSegments[3] === 'itp-register') {
+              breadcrumbs[breadcrumbs.length - 1].isActive = false
+              breadcrumbs.push({ label: 'ITP Register', href: `/projects/${projectId}/quality/itp-register`, isActive: true })
             } else {
               const subRoutes: Record<string, string> = {
                 'documents': 'Documents',

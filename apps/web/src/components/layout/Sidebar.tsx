@@ -144,7 +144,7 @@ export function Sidebar({ className, onCollapseChange }: SidebarProps) {
           { label: 'ITP Register', href: `/projects/${projectId}/quality/itp-register`, icon: FileText },
           { label: 'Inspections', href: `/projects/${projectId}/inspections`, icon: FileText },
           { label: 'Materials', href: `/projects/${projectId}/materials`, icon: FileText },
-          { label: 'Tests', href: `/projects/${projectId}/tests`, icon: FileText },
+          // { label: 'Tests', href: `/projects/${projectId}/tests`, icon: FileText },
           ...(showPrimaryTesting ? [{ label: 'Primary Testing (NSW)', href: `/projects/${projectId}/quality/primary-testing`, icon: FileText } as SectionLink] : []),
         ],
       },

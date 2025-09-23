@@ -133,6 +133,15 @@ You must identify ITPs based on:
 2. **Work Activities Requiring Testing:** Construction activities that require ITPs as identified from the project documents
 3. **Standards and Codes:** Activities governed by standards referenced in the project documents
 
+NUMBERING REQUIREMENT:
+In the same output for each ITP, assign a human-readable ITP number using the format:
+  xxx-yyy-zzz
+Where:
+  - xxx = abbreviated project name (lowercase letters/numbers only, 3–6 chars)
+  - yyy = abbreviated scope/item name (lowercase letters/numbers only, 3–8 chars)
+  - zzz = zero-padded sequence number (e.g., 001, 002)
+Provide the resulting string as "itp_number". If a revision convention is obvious, include an optional "revision_code" (e.g., A, 1), otherwise omit it.
+
 **OUTPUT FORMAT:**
 Return a JSON object with the following structure:
 {
@@ -142,10 +151,12 @@ Return a JSON object with the following structure:
       "scope": "string - Brief description of what this ITP covers",
       "triggering_documents": "string - Which documents require this ITP (PQP sections, specs, standards)",
       "priority": "High|Medium|Low - Based on criticality and contractual requirements",
-      "estimated_items": "integer - Estimated number of inspection/test points"
+      "estimated_items": "integer - Estimated number of inspection/test points",
+      "itp_number": "string - xxx-yyy-zzz as described",
+      "revision_code": "string - optional revision code if available"
     }
   ],
-  "reasoning": "string - Brief explanation of how you identified these ITPs"
+  "reasoning": "string - Brief explanation of how you identified these ITPs and derived numbering"
 }
 """
 

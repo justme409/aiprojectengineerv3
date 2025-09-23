@@ -37,6 +37,7 @@ export type ItpTemplate = {
   version: string | null;
   status: string | null;
   attachment_count?: number; // Count of attached files
+  document_number?: string | null;
 };
 
 interface ItpTemplateListClientProps {
@@ -194,7 +195,7 @@ export default function ItpTemplateListClient({
         minSize: 150,
       },
       {
-        accessorKey: 'id',
+        accessorKey: 'document_number',
         header: ({ column }) => {
           return (
             <Button
@@ -221,7 +222,7 @@ export default function ItpTemplateListClient({
               e.stopPropagation();
             }}
           >
-            {row.original.id.substring(0, 8)}...
+            {row.original.document_number || `${row.original.id.substring(0, 8)}...`}
           </Link>
         ),
         enableResizing: true,

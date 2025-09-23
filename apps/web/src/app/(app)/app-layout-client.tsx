@@ -3,6 +3,7 @@
 import { ReactNode, useState } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { AppHeader } from '@/components/layout/AppHeader'
+import { Breadcrumbs } from '@/components/layout/Breadcrumbs'
 
 export default function AppLayoutClient({ children }: { children: ReactNode }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -13,6 +14,7 @@ export default function AppLayoutClient({ children }: { children: ReactNode }) {
         <Sidebar className="flex-shrink-0" onCollapseChange={setSidebarCollapsed} />
         <main className="flex-1 overflow-auto" style={{ width: sidebarCollapsed ? 'calc(100% - 64px)' : 'calc(100% - 256px)' }}>
           <div className="p-6">
+            <Breadcrumbs />
             {children}
           </div>
         </main>
@@ -20,5 +22,4 @@ export default function AppLayoutClient({ children }: { children: ReactNode }) {
     </div>
   )
 }
-
 

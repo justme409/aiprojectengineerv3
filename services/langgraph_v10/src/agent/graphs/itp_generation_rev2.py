@@ -98,8 +98,18 @@ class StandardsMatchingOutput(BaseModel):
     itp_standards_pairs: List[Dict[str, Any]]  # Now includes reasoning in each pair
     reasoning: str
 
+class RequiredItp(BaseModel):
+    itp_name: str
+    scope: Optional[str] = None
+    triggering_documents: Optional[str] = None
+    priority: Optional[str] = None
+    estimated_items: Optional[int] = None
+    # Numbering fields captured in identification step
+    itp_number: str
+    revision_code: Optional[str] = None
+
 class ITPListOutput(BaseModel):
-    required_itps: List[Dict[str, Any]]
+    required_itps: List[RequiredItp]
     reasoning: str
 
 class InspectionPoint(BaseModel):
@@ -263,9 +273,17 @@ Analyze the above information and extract all required ITPs for this project.
         except Exception as e:
             return {**state, "error": f"Failed to get structured output from LLM: {str(e)}"}
 
+        # Convert pydantic objects to dict for downstream use
+        required_list = []
+        for ri in response.required_itps:
+            try:
+                required_list.append(ri.model_dump())
+            except Exception:
+                required_list.append(dict(ri))
+
         return {
             **state,
-            "required_itps": response.required_itps,
+            "required_itps": required_list,
             "error": None
         }
 
@@ -589,6 +607,16 @@ Generate a complete Inspection and Test Plan for the specific ITP type above. In
 
             itp_name = individual_itp_entry["itp_name"]
 
+            # Pull numbering from identification step
+            matched_req = None
+            for req in state.get("required_itps", []) or []:
+                if req.get("itp_name") == individual_itp_entry["itp_name"]:
+                    matched_req = req
+                    break
+
+            document_number = (matched_req or {}).get("itp_number")
+            revision_code = (matched_req or {}).get("revision_code")
+
             asset_content = {
                 "itp_name": individual_itp_entry["itp_name"],
                 "itp_type": individual_itp_entry["itp_type"],
@@ -605,15 +633,18 @@ Generate a complete Inspection and Test Plan for the specific ITP type above. In
                 "itp_slug": _slugify(itp_name),
             }
             # Persist using versioned asset writer with idempotency
-            idempotency_key = f"itp:{_slugify(itp_name)}"
+            # Use document_number + revision in idempotency to support true revisions
+            idempotency_key = (
+                f"itp:{document_number}:{revision_code}" if document_number else f"itp:{_slugify(itp_name)}"
+            )
             spec = IdempotentAssetWriteSpec(
                 asset_type="itp_document",
                 asset_subtype="",
                 name=itp_name,
                 description=f"ITP asset for {itp_name}",
                 project_id=state["project_id"],
-                document_number=None,
-                revision_code=None,
+                document_number=document_number,
+                revision_code=revision_code,
                 metadata=asset_metadata,
                 content=asset_content,
                 idempotency_key=idempotency_key,

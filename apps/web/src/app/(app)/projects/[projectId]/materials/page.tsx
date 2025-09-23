@@ -42,7 +42,7 @@ export default function MaterialsPage() {
 
   const fetchMaterials = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/projects/${projectId}/materials`)
+      const response = await fetch(`/api/v1/materials?projectId=${projectId}`)
       if (response.ok) {
         const data = await response.json()
         setMaterials(data.materials || [])

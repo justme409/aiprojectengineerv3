@@ -1,3 +1,6 @@
+// NOTE: Deprecated for new write flows. Prefer LangGraph service writes for
+// asset creation/update where possible, to centralize validation and edge semantics.
+// Existing API routes still use this until migrated.
 import { pool } from '@/lib/db'
 import { EdgeSpec, IdempotentAssetWriteSpec, RelationshipEdgeType } from '@/types/graph'
 

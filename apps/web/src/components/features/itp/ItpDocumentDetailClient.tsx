@@ -25,8 +25,58 @@ export default function ItpDocumentDetailClient({ itp, projectId, itpId, project
           >
             ← Back to ITP Register for {projectName}
           </a>
-          <h1 className="text-3xl font-bold text-gray-900">{itp.name}</h1>
-          <p className="text-gray-600 mt-2">Inspection and Test Plan details.</p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{itp.name}</h1>
+              <p className="text-gray-600 mt-2">Inspection and Test Plan details.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                className="px-3 py-2 rounded bg-primary text-white hover:bg-primary/90 text-sm"
+                onClick={async () => {
+                  try {
+                    const createRes = await fetch('/api/v1/assets', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        asset: {
+                          type: 'inspection_request',
+                          name: `Inspection Request for ${itp.name}`,
+                          project_id: projectId,
+                          content: { source_itp_id: itpId }
+                        },
+                        idempotency_key: `inspection_request:${itpId}:${Date.now()}`
+                      })
+                    })
+                    if (!createRes.ok) throw new Error('Failed to create inspection request')
+                    const { id } = await createRes.json()
+                    // Create evidence edge from inspection_request -> itp_document
+                    await fetch('/api/v1/assets', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        asset: { id },
+                        edges: [
+                          {
+                            from_asset_id: id,
+                            to_asset_id: itpId,
+                            edge_type: 'EVIDENCES',
+                            properties: { source: 'itp_document', timestamp: new Date().toISOString() }
+                          }
+                        ]
+                      })
+                    })
+                    alert('Inspection request created')
+                  } catch (e) {
+                    console.error(e)
+                    alert('Failed to create inspection request')
+                  }
+                }}
+              >
+                Request Inspection
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
