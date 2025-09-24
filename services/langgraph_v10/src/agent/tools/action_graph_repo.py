@@ -135,7 +135,9 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
 
     # Check if asset already exists by idempotency key
     cursor.execute("""
-        SELECT id, version, asset_uid FROM public.assets
+        SELECT id, version, asset_uid, revision_code, subtype, name, organization_id, project_id,
+               document_number, path_key, status, approval_state, classification, metadata, content
+        FROM public.assets
         WHERE project_id = %s AND type = %s AND idempotency_key = %s
         ORDER BY version DESC LIMIT 1
     """, (spec.project_id, spec.asset_type, spec.idempotency_key))
@@ -144,7 +146,7 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
 
     if existing_asset:
         # Asset exists - create new version
-        existing_id, current_version, asset_uid = existing_asset
+        existing_id, current_version, asset_uid, existing_revision_code, existing_subtype, existing_name, existing_org_id, existing_project_id, existing_document_number, existing_path_key, existing_status, existing_approval_state, existing_classification, existing_metadata, existing_content = existing_asset
         new_version = current_version + 1
 
         # Mark current version as not current and release idempotency_key to avoid UNIQUE violation
@@ -157,6 +159,9 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
 
         # Insert new version
         asset_id = str(uuid.uuid4())
+        # Preserve revision_code on version bumps; do not change due to repeated idempotent upserts
+        # For other fields, prefer the incoming spec values if provided, otherwise carry forward existing
+        next_revision_code = existing_revision_code
         cursor.execute("""
             INSERT INTO public.assets (
                 id, asset_uid, version, is_current, supersedes_asset_id,
@@ -167,14 +172,15 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
                 %s, %s, %s, true, %s,
                 %s, %s, %s, %s, %s,
                 %s, %s,
-                %s, %s, %s, 'draft', 'not_required', 'internal'
+                %s, %s, %s, %s, %s, %s
             )
         """, (
             asset_id, asset_uid, new_version, existing_id,
-            spec.asset_type, spec.asset_subtype or None, spec.name,
-            organization_id, spec.project_id,
-            spec.document_number, spec.revision_code,
-            Json(spec.metadata), Json(spec.content), spec.idempotency_key
+            spec.asset_type, (spec.asset_subtype or existing_subtype), (spec.name or existing_name),
+            existing_org_id or organization_id, existing_project_id or spec.project_id,
+            (spec.document_number or existing_document_number), next_revision_code,
+            Json(spec.metadata or (existing_metadata or {})), Json(spec.content or (existing_content or {})), spec.idempotency_key,
+            (existing_status or 'draft'), (existing_approval_state or 'not_required'), (existing_classification or 'internal')
         ))
 
         logger.info(f"Created new version {new_version} for existing asset {asset_uid}")
@@ -184,6 +190,8 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
         asset_id = str(uuid.uuid4())
         asset_uid = str(uuid.uuid4())
 
+        # Default initial revision_code for plans to 'A' (uppercase) if not provided
+        initial_revision = spec.revision_code if spec.revision_code is not None else ('A' if spec.asset_type == 'plan' else None)
         cursor.execute("""
             INSERT INTO public.assets (
                 id, asset_uid, version, is_current,
@@ -200,7 +208,7 @@ def _upsert_single_asset(cursor, spec: IdempotentAssetWriteSpec) -> str:
             asset_id, asset_uid,
             spec.asset_type, spec.asset_subtype or None, spec.name,
             organization_id, spec.project_id,
-            spec.document_number, spec.revision_code,
+            spec.document_number, initial_revision,
             Json(spec.metadata), Json(spec.content), spec.idempotency_key
         ))
 

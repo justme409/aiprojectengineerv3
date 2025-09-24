@@ -176,7 +176,7 @@ export default function ClientDashboard({ projectId }: ClientDashboardProps) {
 
               <Link href={`/portal/projects/${projectId}/itp-templates`}>
                 <Button variant="outline" className="w-full">
-                  ITP Templates
+                  ITP Templates Register
                 </Button>
               </Link>
 

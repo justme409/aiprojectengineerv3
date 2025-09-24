@@ -1,18 +1,6 @@
-import { Suspense } from 'react'
+import WbsView from '@/components/features/wbs/WbsView'
 
-interface Props {
-  params: Promise<{ projectId: string }>
-}
-
-export default async function WbsPage({ params }: Props) {
+export default async function WbsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
-  return (
-    <div className="container mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-4">Wbs</h1>
-      <p className="text-muted-foreground">This page is under construction.</p>
-      <Suspense fallback={<div>Loading...</div>}>
-        <div>Project ID: {projectId}</div>
-      </Suspense>
-    </div>
-  )
+  return <WbsView projectId={projectId} />
 }

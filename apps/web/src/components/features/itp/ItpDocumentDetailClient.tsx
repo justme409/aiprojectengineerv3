@@ -20,10 +20,10 @@ export default function ItpDocumentDetailClient({ itp, projectId, itpId, project
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <a
-            href={`/projects/${projectId}/quality/itp-register`}
+            href={`/projects/${projectId}/quality/lot-register`}
             className="text-sm text-muted-foreground hover:underline flex items-center mb-4"
           >
-            ← Back to ITP Register for {projectName}
+            ← Back to Lot Register for {projectName}
           </a>
           <div className="flex items-start justify-between gap-4">
             <div>

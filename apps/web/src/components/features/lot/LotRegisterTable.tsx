@@ -26,15 +26,16 @@ interface Lot {
 
 interface LotRegisterTableProps {
   projectId: string
+  viewMode?: 'wbs' | 'lbs'
 }
 
-export default function LotRegisterTable({ projectId }: LotRegisterTableProps) {
+export default function LotRegisterTable({ projectId, viewMode = 'wbs' }: LotRegisterTableProps) {
   const [lots, setLots] = useState<Lot[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetchLots = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/projects/${projectId}/quality/lots`)
+      const response = await fetch(`/api/v1/projects/${projectId}/quality/lots?view=${viewMode}`)
       if (response.ok) {
         const data = await response.json()
         setLots(data.lots)
@@ -44,7 +45,7 @@ export default function LotRegisterTable({ projectId }: LotRegisterTableProps) {
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [projectId, viewMode])
 
   useEffect(() => {
     fetchLots()
@@ -87,7 +88,7 @@ export default function LotRegisterTable({ projectId }: LotRegisterTableProps) {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Lot Register</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Lot Register ({viewMode.toUpperCase()} View)</h1>
         <Button className="bg-primary hover:bg-primary/90">
           Create Lot
         </Button>

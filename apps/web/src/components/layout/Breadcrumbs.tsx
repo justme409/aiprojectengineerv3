@@ -46,7 +46,7 @@ export function Breadcrumbs() {
               'management-plans': 'Management Plans',
               'wbs': 'WBS',
               'lots': 'Lots',
-              'itp-templates': 'ITP Templates',
+              'itp-templates-register': 'ITP Templates Register',
               'details': 'Details'
             }
             const label = map[pathSegments[3]] || pathSegments[3]
@@ -78,10 +78,10 @@ export function Breadcrumbs() {
 
           // Add specific sub-route if we're not on overview
           if (pathSegments[2] && pathSegments[2] !== 'overview') {
-            if (pathSegments[2] === 'quality' && pathSegments[3] === 'itp-templates') {
+            if (pathSegments[2] === 'quality' && pathSegments[3] === 'itp-templates-register') {
               // Handle ITP Templates routes - skip to overview since quality isn't a standalone page
               breadcrumbs[breadcrumbs.length - 1].isActive = false
-              breadcrumbs.push({ label: 'ITP Templates', href: `/projects/${projectId}/quality/itp-templates` })
+              breadcrumbs.push({ label: 'ITP Templates Register', href: `/projects/${projectId}/quality/itp-templates-register` })
 
               if (pathSegments[4]) {
                 // Individual template detail page
@@ -92,15 +92,16 @@ export function Breadcrumbs() {
                   isActive: true
                 })
               } else {
-                // ITP Templates list page
+                // ITP Templates Register list page
                 breadcrumbs[breadcrumbs.length - 1].isActive = true
               }
-            } else if (pathSegments[2] === 'quality' && pathSegments[3] === 'itp-register') {
+            } else if (pathSegments[2] === 'quality' && pathSegments[3] === 'lot-register') {
               breadcrumbs[breadcrumbs.length - 1].isActive = false
-              breadcrumbs.push({ label: 'ITP Register', href: `/projects/${projectId}/quality/itp-register`, isActive: true })
+              breadcrumbs.push({ label: 'Lot Register', href: `/projects/${projectId}/quality/lot-register`, isActive: true })
             } else {
               const subRoutes: Record<string, string> = {
                 'documents': 'Documents',
+                'plans': 'Project Plans',
                 'settings': 'Settings',
                 'edit': 'Edit'
               }

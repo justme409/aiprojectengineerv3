@@ -42,16 +42,21 @@ export async function GET(request: NextRequest) {
       paramIndex++
     }
 
-    // Check user has access to project/organization
+    // Check user has access to project via org membership OR explicit project membership
     if (projectId) {
-      const accessCheck = await pool.query(`
-        SELECT 1 FROM public.projects p
-        JOIN public.organization_users ou ON ou.organization_id = p.organization_id
-        WHERE p.id = $1 AND ou.user_id = $2
-      `, [projectId, (session.user as any).id])
-
-      if (accessCheck.rows.length === 0) {
-        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      const userId = (session.user as any).id
+      const orgAccess = await pool.query(
+        `SELECT 1 FROM public.projects p
+         JOIN public.organization_users ou ON ou.organization_id = p.organization_id
+         WHERE p.id = $1 AND ou.user_id = $2`
+      , [projectId, userId])
+      if (orgAccess.rows.length === 0) {
+        const projectAccess = await pool.query(
+          `SELECT 1 FROM public.project_members pm WHERE pm.project_id = $1 AND pm.user_id = $2`
+        , [projectId, userId])
+        if (projectAccess.rows.length === 0) {
+          return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+        }
       }
     }
 

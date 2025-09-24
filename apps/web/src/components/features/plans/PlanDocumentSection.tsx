@@ -17,20 +17,21 @@ export default function PlanDocumentSection(props: Props) {
   const { projectId, planType, title, description, defaultExpanded = false } = props
   const [expanded, setExpanded] = React.useState<boolean>(defaultExpanded)
   const [isEditing, setIsEditing] = React.useState<boolean>(false)
+  const [refreshToken, setRefreshToken] = React.useState<number>(0)
   const [meta, setMeta] = React.useState<{
     revisionIdentifier: string
-    approverName: string | null
-    approvedAt: string | null
-  }>({ revisionIdentifier: 'A', approverName: null, approvedAt: null })
+    approvalState: string
+  }>({ revisionIdentifier: 'A', approvalState: 'not_required' })
 
   const revisionElId = React.useMemo(
     () => `plan-${projectId}-${planType}-revision`,
     [projectId, planType]
   )
-  const approverElId = React.useMemo(
-    () => `plan-${projectId}-${planType}-approver`,
+  const approvalStateElId = React.useMemo(
+    () => `plan-${projectId}-${planType}-approval-state`,
     [projectId, planType]
   )
+  // Approver display removed from header per UX request
 
   React.useEffect(() => {
     let mounted = true
@@ -44,8 +45,7 @@ export default function PlanDocumentSection(props: Props) {
           const m = await res.json()
           setMeta({
             revisionIdentifier: m?.revisionIdentifier || 'A',
-            approverName: m?.approverName ?? null,
-            approvedAt: m?.approvedAt ?? null,
+            approvalState: m?.approvalState || 'not_required',
           })
         }
       } catch {}
@@ -82,7 +82,7 @@ export default function PlanDocumentSection(props: Props) {
         {expanded && (
           <div className="p-8 prose prose-slate max-w-none">
             <div className="flex items-start justify-between mb-6">
-              <div className="grid grid-cols-3 gap-4 text-sm w-full">
+              <div className="grid grid-cols-2 gap-4 text-sm w-full">
                 <div className="border p-3">
                   <span className="font-semibold">Plan:</span>{' '}
                   {title}
@@ -90,13 +90,11 @@ export default function PlanDocumentSection(props: Props) {
                 <div className="border p-3">
                   <span className="font-semibold">Revision:</span>{' '}
                   <span id={revisionElId}>{meta.revisionIdentifier}</span>
-                </div>
-                <div className="border p-3">
-                  <span className="font-semibold">Approver:</span>{' '}
-                  <span id={approverElId}>
-                    {meta.approverName
-                      ? `${meta.approverName}${meta.approvedAt ? ` (${new Date(meta.approvedAt).toLocaleDateString()})` : ''}`
-                      : '—'}
+                  <span
+                    id={approvalStateElId}
+                    className={meta.approvalState === 'pending_review' ? 'ml-1 text-xs' : 'hidden'}
+                  >
+                    {' - Submitted for approval'}
                   </span>
                 </div>
               </div>
@@ -123,10 +121,15 @@ export default function PlanDocumentSection(props: Props) {
                 projectId={projectId}
                 planType={planType}
                 revisionElId={revisionElId}
-                approverElId={approverElId}
+                approvalStateElId={approvalStateElId}
+                onSaved={() => {
+                  setIsEditing(false)
+                  setRefreshToken((v) => v + 1)
+                }}
+                onClose={() => setIsEditing(false)}
               />
             ) : (
-              <PlanDocViewer projectId={projectId} planType={planType} />
+              <PlanDocViewer projectId={projectId} planType={planType} refreshToken={refreshToken} />
             )}
           </div>
         )}
@@ -135,6 +138,4 @@ export default function PlanDocumentSection(props: Props) {
   )
 }
 
-
-
-
+  

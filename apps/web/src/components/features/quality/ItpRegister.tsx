@@ -33,7 +33,7 @@ export default function ItpRegister({ projectId }: ItpRegisterProps) {
       const response = await fetch(`/api/v1/projects/${projectId}/quality/itp`)
       if (response.ok) {
         const data = await response.json()
-        setItpRecords(data.itp_register)
+        setItpRecords(data.itp_register || data.data || [])
       }
     } catch (error) {
       console.error('Error fetching ITP records:', error)

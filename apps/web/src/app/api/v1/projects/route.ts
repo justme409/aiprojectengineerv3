@@ -70,8 +70,8 @@ export async function POST(request: NextRequest) {
 
     // Create project
     const projectResult = await pool.query(`
-      INSERT INTO public.projects (id, name, description, location, client_name, created_by_user_id, organization_id)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
+      INSERT INTO public.projects (id, name, description, location, client_name, created_by_user_id, organization_id, status)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, 'active')
       RETURNING *
     `, [name, description, location, client_name, (session.user as any).id, organizationId])
 

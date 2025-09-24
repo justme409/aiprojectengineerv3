@@ -36,6 +36,7 @@ class OrchestratorState(TypedDict):
     generated_plans: List[Dict[str, Any]]
     generated_itps: List[Dict[str, Any]]
     project_details: Optional[Dict[str, Any]]
+    project_jurisdiction: Optional[str]
 
     # Aggregated write specifications per knowledge graph contract
     asset_specs: List[Dict[str, Any]]

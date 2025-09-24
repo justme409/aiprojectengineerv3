@@ -9,7 +9,7 @@ export default async function ItpTemplateDetailPage({ params }: { params: Promis
 
   const session = await auth();
   if (!session?.user) {
-    redirect(`/auth/login?message=auth_required&redirectTo=/projects/${projectId}/quality/itp-templates/${templateId}`);
+    redirect(`/auth/login?message=auth_required&redirectTo=/projects/${projectId}/quality/itp-templates-register/${templateId}`);
   }
 
   const project = await getProjectById(projectId);
@@ -36,3 +36,5 @@ export default async function ItpTemplateDetailPage({ params }: { params: Promis
 }
 
 export const revalidate = 0
+
+

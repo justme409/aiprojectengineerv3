@@ -1,12 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import PlanDocumentSection from '@/components/features/plans/PlanDocumentSection'
 import {
   FileText,
@@ -14,7 +12,6 @@ import {
   TreePine,
   HardHat,
   Truck,
-  Plus,
   Eye,
   Download,
   Calendar,
@@ -81,8 +78,10 @@ export default function ProjectPlansPage() {
   const projectId = params.projectId as string
   const [plans, setPlans] = useState<ManagementPlan[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedPlanType, setSelectedPlanType] = useState<string>('pqp')
   const [viewingPlan, setViewingPlan] = useState<ManagementPlan | null>(null)
+  const generatePlan = (planType: 'pqp' | 'emp' | 'ohsmp' | 'tmp') => {
+    console.warn(`Plan generation not implemented for ${planType}`)
+  }
 
   useEffect(() => {
     const transformAssetsToPlans = (assets: any[]): ManagementPlan[] => {
@@ -151,7 +150,6 @@ export default function ProjectPlansPage() {
 
   const viewPlan = (plan: ManagementPlan) => {
     setViewingPlan(plan)
-    setSelectedPlanType(plan.type)
   }
 
   const refreshPlans = async () => {
@@ -215,29 +213,6 @@ export default function ProjectPlansPage() {
     }
   }
 
-  const generatePlan = async (planType: string) => {
-    try {
-      const response = await fetch(`/api/v1/projects/${projectId}/ai/plan-generation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          projectId,
-          planType
-        })
-      })
-
-      if (response.ok) {
-        // Refresh plans after generation
-        refreshPlans()
-      } else {
-        console.error('Failed to generate plan')
-      }
-    } catch (error) {
-      console.error('Error generating plan:', error)
-    }
-  }
 
   const getStatusBadge = (status: string) => {
     const variants = {
@@ -289,10 +264,6 @@ export default function ProjectPlansPage() {
             <Download className="mr-2 h-4 w-4" />
             Export All
           </Button>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Generate Plan
-          </Button>
         </div>
       </div>
 
@@ -328,71 +299,6 @@ export default function ProjectPlansPage() {
       />
     </div>
 
-      {/* Plan Types Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Object.entries(planTypes).map(([type, config]) => {
-          const plan = plans.find(p => p.type === type)
-          console.log(`Rendering ${type} plan card:`, plan ? `Found with ${plan.items.length} items` : 'NOT FOUND')
-          console.log(`Available plans:`, plans.map(p => p.type))
-          const IconComponent = config.icon
-
-          return (
-            <Card key={type} className="hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <IconComponent className={`h-8 w-8 text-${config.color}-600`} />
-                  {plan && getStatusBadge(plan.status)}
-                </div>
-                <CardTitle className="text-lg">{config.title}</CardTitle>
-                <CardDescription>{config.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center">
-                  <div className="text-2xl font-bold">
-                    {plan?.items?.length || 0}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    sections
-                  </div>
-                </div>
-                <div className="mt-4 space-y-2">
-                  {plan ? (
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => viewPlan(plan)}
-                      >
-                        <Eye className="mr-2 h-3 w-3" />
-                        View
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Download className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => generatePlan(type)}
-                    >
-                      <Plus className="mr-2 h-3 w-3" />
-                      Generate
-                    </Button>
-                  )}
-                </div>
-                {plan && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Updated {new Date(plan.generatedAt).toLocaleDateString()}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
 
       {/* Detailed Plan View */}
       {viewingPlan && (
@@ -471,42 +377,6 @@ export default function ProjectPlansPage() {
         </Card>
       )}
 
-      {/* Plan Navigation Tabs (when not viewing a specific plan) */}
-      {!viewingPlan && plans.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Plan Details</CardTitle>
-            <CardDescription>
-              Detailed view of management plan sections and requirements
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={selectedPlanType} onValueChange={setSelectedPlanType}>
-              <TabsList className="grid w-full grid-cols-4">
-                {plans.map(plan => (
-                  <TabsTrigger key={plan.type} value={plan.type}>
-                    {planTypes[plan.type]?.title}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {plans.map(plan => (
-                <TabsContent key={plan.type} value={plan.type} className="space-y-4">
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground mb-4">
-                      Click &quot;View&quot; on the plan above to see detailed sections and requirements.
-                    </p>
-                    <Button onClick={() => viewPlan(plan)}>
-                      <Eye className="mr-2 h-4 w-4" />
-                      View {planTypes[plan.type]?.title}
-                    </Button>
-                  </div>
-                </TabsContent>
-              ))}
-            </Tabs>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Empty State */}
       {plans.length === 0 && (
@@ -534,4 +404,3 @@ export default function ProjectPlansPage() {
     </div>
   )
 }
-

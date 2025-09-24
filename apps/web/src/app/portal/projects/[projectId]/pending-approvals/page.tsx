@@ -1,18 +1,9 @@
-import { Suspense } from 'react'
+import ApprovalsInbox from '@/components/features/approvals/ApprovalsInbox'
+import { auth } from '@/lib/auth'
 
-interface Props {
-  params: Promise<{ projectId: string }>
-}
-
-export default async function PendingApprovalsPage({ params }: Props) {
+export default async function PendingApprovalsPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const session = await auth()
+  const userId = (session?.user as any)?.id || ''
   const { projectId } = await params
-  return (
-    <div className="container mx-auto py-6">
-      <h1 className="text-2xl font-bold mb-4">Pending-approvals</h1>
-      <p className="text-muted-foreground">This page is under construction.</p>
-      <Suspense fallback={<div>Loading...</div>}>
-        <div>Project ID: {projectId}</div>
-      </Suspense>
-    </div>
-  )
+  return <ApprovalsInbox projectId={projectId} userId={userId} />
 }

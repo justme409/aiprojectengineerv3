@@ -13,6 +13,8 @@ export async function GET(
     }
 
     const { projectId } = await params
+    const { searchParams } = new URL(request.url)
+    const view = (searchParams.get('view') || 'wbs').toLowerCase()
 
     // Check access
     const accessCheck = await pool.query(`
@@ -26,11 +28,14 @@ export async function GET(
     }
 
     // Get lots from work_lot_register view
-    const result = await pool.query(`
-      SELECT * FROM public.work_lot_register
-      WHERE project_id = $1
-      ORDER BY lot_number
-    `, [projectId])
+    // Order by WBS or LBS-related fields depending on requested view
+    const orderClause = view === 'lbs' ? 'location_path, lot_number' : 'lot_number'
+    const result = await pool.query(
+      `SELECT * FROM public.work_lot_register
+       WHERE project_id = $1
+       ORDER BY ${orderClause}`,
+      [projectId]
+    )
 
     return NextResponse.json({ lots: result.rows })
   } catch (error) {

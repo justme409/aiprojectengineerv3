@@ -32,8 +32,8 @@ Per-field guidance (each key must appear exactly once in the JSON):
   - defects_liability_period
 - contract_value: Monetary value if present (keep original formatting); else null.
 - procurement_method: If specified (e.g., D&C, EPC, lump sum); else null.
-- jurisdiction: State/territory name or label inferred from documents; else null.
-- jurisdiction_code: Abbreviation if available (nsw/qld/vic/sa/wa/tas/nt/act); else null.
+- jurisdiction: State/territory full name or label inferred from documents; else null.
+- jurisdiction_code: REQUIRED when jurisdiction can be inferred. Must be one of [QLD, NSW, VIC, SA, WA, TAS, NT, ACT] in UPPERCASE; else null. If only a full state name is present (e.g., "Queensland", "South Australia"), convert to the corresponding code (QLD/SA/etc). Do NOT output lowercase or any other values.
 - regulatory_framework: Short label of the governing framework (e.g., Work Health and Safety Act); else null.
 - applicable_standards: Array of standard/code references if present; else empty array or null.
 - source_documents: Array of document IDs used (from headers below), strings; else empty array.

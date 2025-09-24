@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import RowAttachmentUploader from './RowAttachmentUploader';
 import { toast } from 'sonner';
+import { saveAssetContent, commitAssetRevision } from '@/lib/actions/asset-actions';
 
 const AutoResizingTextarea = React.forwardRef<
   HTMLTextAreaElement,
@@ -63,6 +64,65 @@ interface ItpItem {
   Responsibility?: string | null;
   'Hold/Witness Point'?: string | null;
   attachments?: any[] | null;
+  // Database field names (snake_case)
+  inspection_test_point?: string | null;
+  acceptance_criteria?: string | null;
+  specification_clause?: string | null;
+  inspection_test_method?: string | null;
+  hold_witness_point?: string | null;
+  frequency?: string | null;
+  responsibility?: string | null;
+}
+
+interface EditableCellProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled: boolean;
+}
+
+function EditableCellInner({ value, onChange, placeholder, disabled }: EditableCellProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [cellValue, setCellValue] = useState(value);
+
+  useEffect(() => {
+    setCellValue(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    if (cellValue !== value) {
+      onChange(cellValue);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && event.metaKey) {
+      handleBlur();
+    }
+  };
+
+  if (!isEditing) {
+    return (
+      <div
+        className="w-full min-h-[24px] cursor-text whitespace-pre-wrap py-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-1 transition-colors"
+        onClick={() => !disabled && setIsEditing(true)}
+      >
+        {cellValue || <span className="text-gray-400 italic">{placeholder || 'Click to edit'}</span>}
+      </div>
+    );
+  }
+
+  return (
+    <AutoResizingTextarea
+      className="w-full h-auto bg-transparent border-0 focus:ring-0 resize-none overflow-hidden"
+      value={cellValue}
+      onChange={(e) => setCellValue(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      autoFocus
+    />
+  );
 }
 
 interface TemplateData {
@@ -137,13 +197,13 @@ export function ItpTemplateEditorEnhanced({
       item: {
         ...item,
         // Map database field names to display field names
-        'Inspection/Test Point': item.inspection_test_point || item.inspection_test_point,
-        'Acceptance Criteria': item.acceptance_criteria,
-        'Specification Clause': item.specification_clause,
-        'Inspection/Test Method': item.inspection_test_method,
-        'Hold/Witness Point': item.hold_witness_point,
-        Frequency: item.frequency,
-        Responsibility: item.responsibility,
+        'Inspection/Test Point': (item as any)['Inspection/Test Point'] ?? item.inspection_test_point ?? '',
+        'Acceptance Criteria': (item as any)['Acceptance Criteria'] ?? item.acceptance_criteria ?? '',
+        'Specification Clause': (item as any)['Specification Clause'] ?? item.specification_clause ?? '',
+        'Inspection/Test Method': (item as any)['Inspection/Test Method'] ?? item.inspection_test_method ?? '',
+        'Hold/Witness Point': (item as any)['Hold/Witness Point'] ?? item.hold_witness_point ?? '',
+        Frequency: (item as any)['Frequency'] ?? item.frequency ?? '',
+        Responsibility: (item as any)['Responsibility'] ?? item.responsibility ?? '',
       },
       originalIndex: index,
     }));
@@ -198,7 +258,7 @@ export function ItpTemplateEditorEnhanced({
     updateItemById(rowId, (prev) => ({ ...prev, attachments } as any));
   }, [updateItemById]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     try {
       // Preserve original content shape: if object with itp_items, update itp_items; if array, save array
@@ -207,11 +267,7 @@ export function ItpTemplateEditorEnhanced({
         : data.content && typeof data.content === 'object'
           ? data.content
           : [];
-      const result = await saveAssetContent({
-        assetId: templateId,
-        content: contentForSave as any,
-        projectId,
-      });
+      const result = await saveAssetContent(templateId, projectId, contentForSave as any);
 
       if (result.success) {
         setOriginalData(data);
@@ -226,9 +282,9 @@ export function ItpTemplateEditorEnhanced({
     } finally {
       setSaving(false);
     }
-  };
+  }, [data, projectId, templateId]);
 
-  const handleCommit = async () => {
+  const handleCommit = useCallback(async () => {
     if (hasUnsavedChanges) {
       toast.error('Please save your changes before creating a new revision');
       return;
@@ -260,7 +316,7 @@ export function ItpTemplateEditorEnhanced({
     } finally {
       setCommitting(false);
     }
-  };
+  }, [hasUnsavedChanges, projectId, templateId]);
 
   useEffect(() => {
     const onSave = async () => {
@@ -275,9 +331,68 @@ export function ItpTemplateEditorEnhanced({
       document.removeEventListener('itp:save', onSave as EventListener);
       document.removeEventListener('itp:commit', onCommit as EventListener);
     };
-  }, []);
+  }, [handleSave, handleCommit]);
 
   const columnHelper = createColumnHelper<any>();
+
+  const EditableCell = ({ value, onChange, placeholder }: {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+  }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [cellValue, setCellValue] = useState(value || '');
+
+    useEffect(() => {
+      setCellValue(value || '');
+    }, [value]);
+
+    const handleBlur = () => {
+      setIsEditing(false);
+      onChange(cellValue);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleBlur();
+      }
+      if (e.key === 'Escape') {
+        setCellValue(value || '');
+        setIsEditing(false);
+      }
+    };
+
+    if (disabled) {
+      return (
+        <div className="w-full min-h-[24px] whitespace-pre-wrap py-1 text-gray-500">
+          {cellValue || <span className="text-gray-400 italic">No data</span>}
+        </div>
+      );
+    }
+
+    if (isEditing) {
+      return (
+        <AutoResizingTextarea
+          className="w-full h-auto bg-transparent border-0 focus:ring-0 resize-none overflow-hidden"
+          value={cellValue}
+          onChange={(e) => setCellValue(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          autoFocus
+        />
+      );
+    }
+
+    return (
+      <div
+        className="w-full min-h-[24px] cursor-text whitespace-pre-wrap py-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-1 transition-colors"
+        onClick={() => !disabled && setIsEditing(true)}
+      >
+        {cellValue || <span className="text-gray-400 italic">{placeholder || 'Click to edit'}</span>}
+      </div>
+    );
+  };
 
   const columns = React.useMemo(() => [
     columnHelper.accessor('id', {
@@ -429,7 +544,7 @@ export function ItpTemplateEditorEnhanced({
       size: 120,
       enableResizing: true,
     }),
-  ], [handleCellUpdate, templateId, projectId, disabled]);
+  ], [columnHelper, EditableCell, handleCellUpdate, handleAttachmentChange, templateId, projectId, disabled]);
 
   const table = useReactTable({
     data: rows,
@@ -456,65 +571,6 @@ export function ItpTemplateEditorEnhanced({
   });
 
   const isSectionRow = (row: any) => row.original.isSection;
-
-  const EditableCell = ({ value, onChange, placeholder }: {
-    value: string;
-    onChange: (value: string) => void;
-    placeholder?: string;
-  }) => {
-    const [isEditing, setIsEditing] = useState(false);
-    const [cellValue, setCellValue] = useState(value || '');
-
-    useEffect(() => {
-      setCellValue(value || '');
-    }, [value]);
-
-    const handleBlur = () => {
-      setIsEditing(false);
-      onChange(cellValue);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        handleBlur();
-      }
-      if (e.key === 'Escape') {
-        setCellValue(value || '');
-        setIsEditing(false);
-      }
-    };
-
-    if (disabled) {
-      return (
-        <div className="w-full min-h-[24px] whitespace-pre-wrap py-1 text-gray-500">
-          {cellValue || <span className="text-gray-400 italic">No data</span>}
-        </div>
-      );
-    }
-
-    if (isEditing) {
-      return (
-        <AutoResizingTextarea
-          className="w-full h-auto bg-transparent border-0 focus:ring-0 resize-none overflow-hidden"
-          value={cellValue}
-          onChange={(e) => setCellValue(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          autoFocus
-        />
-      );
-    }
-
-    return (
-      <div
-        className="w-full min-h-[24px] cursor-text whitespace-pre-wrap py-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-1 transition-colors"
-        onClick={() => !disabled && setIsEditing(true)}
-      >
-        {cellValue || <span className="text-gray-400 italic">{placeholder || 'Click to edit'}</span>}
-      </div>
-    );
-  };
 
   return (
     <div className="bg-background rounded-lg shadow-sm w-full">

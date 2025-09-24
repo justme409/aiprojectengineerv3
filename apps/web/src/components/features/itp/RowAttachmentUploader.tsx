@@ -74,7 +74,7 @@ export default function RowAttachmentUploader({
     } catch (e) {
       // Silent fail
     }
-  }, [templateId, rowId]);
+  }, [apiBase, templateId, rowId]);
 
   React.useEffect(() => {
     loadAttachments();
@@ -377,5 +377,4 @@ export default function RowAttachmentUploader({
     </div>
   );
 }
-
 

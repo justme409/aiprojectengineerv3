@@ -1,6 +1,5 @@
 import React from 'react'
 import WbsTreeView from '@/components/features/wbs/WbsTreeView'
-import LbsView from '@/components/features/lbs/LbsView'
 import { WbsItem } from '@/types/graph'
 
 type ProjectWbsPageProps = {
@@ -102,11 +101,7 @@ export default async function ProjectWbsPage({
         />
       </div>
 
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Location Breakdown Structure</h2>
-        {/* Merge LBS into this page as a subsection */}
-        <LbsView projectId={projectId} />
-      </div>
+      {/* LBS UI removed per design: Lot Register provides WBS/LBS views in one table */}
     </div>
   )
 }

@@ -59,11 +59,7 @@ export default function RevisionSelector({
   const [creating, setCreating] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
 
-  React.useEffect(() => {
-    loadRevisionHistory();
-  }, [templateId]);
-
-  const loadRevisionHistory = async () => {
+  const loadRevisionHistory = React.useCallback(async () => {
     if (typeof window === 'undefined') return; // Prevent SSR fetch
     setLoading(true);
     try {
@@ -77,7 +73,11 @@ export default function RevisionSelector({
     } finally {
       setLoading(false);
     }
-  };
+  }, [templateId]);
+
+  React.useEffect(() => {
+    loadRevisionHistory();
+  }, [loadRevisionHistory]);
 
   const handleCreateRevision = async () => {
     if (!changeLog.trim()) {
@@ -203,7 +203,7 @@ export default function RevisionSelector({
               <DialogHeader>
                 <DialogTitle>Create New Revision</DialogTitle>
                 <DialogDescription>
-                  This will create a new revision of the template. Please describe the changes you've made.
+                  This will create a new revision of the template. Please describe the changes you&apos;ve made.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -243,5 +243,3 @@ export default function RevisionSelector({
     </div>
   );
 }
-
-

@@ -28,7 +28,15 @@ export default function ItpTemplateDetailClient({
   lotId,
   isClientPortal = false
 }: ItpTemplateDetailClientProps) {
-  if (!template) {
+  const actualTemplateId = templateId
+  const [templateData, setTemplateData] = React.useState(template)
+  const [currentRevision, setCurrentRevision] = React.useState<string>((template?.content?.revision || template?.version) || 'A')
+  const [comparisonOpen, setComparisonOpen] = React.useState(false)
+  const [submitting, setSubmitting] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false)
+
+  if (!templateData) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -40,14 +48,6 @@ export default function ItpTemplateDetailClient({
       </div>
     )
   }
-
-  const actualTemplateId = templateId
-  const [currentRevision, setCurrentRevision] = React.useState<string>((template?.content?.revision || template?.version) || 'A')
-  const [comparisonOpen, setComparisonOpen] = React.useState(false)
-  const [submitting, setSubmitting] = React.useState(false)
-  const [exporting, setExporting] = React.useState(false)
-  const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false)
-  const [templateData, setTemplateData] = React.useState(template)
 
   return (
     <div className="flex flex-col min-h-screen bg-background overflow-x-hidden">

@@ -29,11 +29,13 @@ You are an expert in Australian construction standards matching, specializing in
    - ACT (Australian Capital Territory) - Use ACT-specific standards only
    - National/Australia-wide standards - Can apply to multiple jurisdictions
 
-2. **LOOK FOR JURISDICTION MATCHES FIRST**: The org_identifier field shows the jurisdiction. Prioritize standards that match the project's jurisdiction.
+2. **LOOK FOR JURISDICTION MATCHES FIRST**: The jurisdiction field shows the jurisdiction. Prioritize standards that match the project's jurisdiction.
 
 3. **BE SPECIFIC**: Most ITPs will only need 1-2 standards from their jurisdiction's standard pack. It's rarely more than that.
 
 4. **PROJECT CONTEXT**: Consider what type of project this is and match standards accordingly.
+
+**Project Jurisdiction:** {project_jurisdiction}
 
 **Required ITPs:**
 {required_itps_text}
@@ -43,7 +45,7 @@ You are an expert in Australian construction standards matching, specializing in
 
 **MATCHING PROCESS:**
 1. Look at each ITP name and type to understand what it covers
-2. Check the org_identifier field in each standard to see its jurisdiction (QLD, NSW, TAS, SA, VIC, WA, NT, ACT, or National)
+2. Check the jurisdiction field in each standard to see its jurisdiction (QLD, NSW, TAS, SA, VIC, WA, NT, ACT, or National)
 3. Match the ITP to standards from the SAME jurisdiction first
 4. If no perfect jurisdiction match, consider national standards as secondary options
 5. For most ITPs, only 1 standard is needed - the most directly applicable one from the correct jurisdiction
@@ -69,7 +71,7 @@ Return pairs in this format:
 - Focus on the most directly applicable standards from the correct jurisdiction
 """
 from agent.tools.db_tools import (
-    fetch_reference_documents,
+    fetch_reference_documents_by_jurisdiction,
     fetch_standard_document_content,
 )
 from agent.tools.action_graph_repo import (
@@ -202,10 +204,38 @@ def _slugify(text: str) -> str:
     text = re.sub(r"-+", "-", text)
     return text or "unknown"
 
+def _standard_jurisdiction(jurisdiction: Optional[str]) -> str:
+    """Return normalized jurisdiction for a standard; default to NATIONAL when missing/unknown.
+
+    Note: With upstream providing Strict jurisdiction_code, this is only used when
+    inspecting DB values for classification and should be very conservative.
+    """
+    if not jurisdiction:
+        return "NATIONAL"
+    v = str(jurisdiction).strip().lower()
+    mapping = {
+        "queensland": "QLD",
+        "new south wales": "NSW",
+        "tasmania": "TAS",
+        "south australia": "SA",
+        "victoria": "VIC",
+        "western australia": "WA",
+        "northern territory": "NT",
+        "australian capital territory": "ACT",
+    }
+    if v in mapping:
+        return mapping[v]
+    if v in {"qld","nsw","tas","sa","vic","wa","nt","act"}:
+        return v.upper()
+    if v.startswith("australia"):
+        return "NATIONAL"
+    return "NATIONAL"
+
 class ITPGenerationState(TypedDict):
     project_id: str
     pqp_content: Optional[str]
     txt_project_documents: List[Dict[str, Any]]
+    project_jurisdiction: Optional[str]
     required_itps: Optional[List[Dict[str, Any]]]
     itp_standards_pairs: Optional[List[Dict[str, Any]]]
     applicable_standard_documents: Optional[List[Dict[str, Any]]]
@@ -220,6 +250,8 @@ class InputState(TypedDict):
     project_id: str
     pqp_content: Optional[str]
     txt_project_documents: List[Dict[str, Any]]
+    project_jurisdiction: Optional[str]
+    project_details: Optional[Dict[str, Any]]
 
 class OutputState(TypedDict):
     required_itps: List[Dict[str, Any]]
@@ -234,10 +266,16 @@ def fetch_docs_node(state: InputState) -> ITPGenerationState:
     """Fetch and validate project documents."""
     if not state.get("txt_project_documents"):
         return {**state, "error": "txt_project_documents missing; provide extracted documents upstream"}
+    # Derive jurisdiction from orchestrator state when not provided directly
+    pj = state.get("project_jurisdiction")
+    if not pj:
+        details = state.get("project_details") or {}
+        pj = details.get("jurisdiction_code")
     return {
         "project_id": state["project_id"],
         "pqp_content": state.get("pqp_content"),
         "txt_project_documents": state["txt_project_documents"],
+        "project_jurisdiction": pj,
         "error": None
     }
 
@@ -299,17 +337,22 @@ def match_standards_to_itps_node(state: ITPGenerationState) -> ITPGenerationStat
         if not state.get("required_itps"):
             return {**state, "error": "No required ITPs available"}
 
-        # Get all available standards
-        all_standards = fetch_reference_documents.invoke({})
+        # Fail fast if jurisdiction is missing
+        project_juris = state.get("project_jurisdiction")
+        if not project_juris:
+            return {**state, "error": "Missing project_jurisdiction in state; ensure project details extraction populated it"}
 
-        # Format standards list for the prompt
+        # Get jurisdiction-filtered standards directly from DB tool
+        filtered = fetch_reference_documents_by_jurisdiction.invoke({"project_jurisdiction": project_juris})
+
+        # Format standards list for the prompt (filtered only)
         standards_list = []
-        for std in all_standards:
+        for std in filtered:
             standards_list.append({
                 "id": std.get("id"),
                 "spec_id": std.get("spec_id"),
                 "spec_name": std.get("spec_name"),
-                "org_identifier": std.get("org_identifier"),
+                "jurisdiction": std.get("jurisdiction"),
                 "synopsis": std.get("synopsis", "No synopsis available")
             })
 
@@ -323,7 +366,8 @@ def match_standards_to_itps_node(state: ITPGenerationState) -> ITPGenerationStat
 
         prompt = SIMPLE_STANDARDS_PROMPT.format(
             standards_list=json.dumps(standards_list, indent=2),
-            required_itps_text=required_itps_text
+            required_itps_text=required_itps_text,
+            project_jurisdiction=project_juris
         ) + project_context
 
         # Get structured output
@@ -800,12 +844,13 @@ builder.add_edge("generate_itp", END)
 itp_generation_rev2_graph = builder.compile()
 
 # Convenience function to run ITP generation
-def run_itp_generation_rev2(project_id: str, pqp_content: Optional[str] = None, txt_project_documents: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def run_itp_generation_rev2(project_id: str, pqp_content: Optional[str] = None, txt_project_documents: Optional[List[Dict[str, Any]]] = None, project_jurisdiction: Optional[str] = None) -> Dict[str, Any]:
     """Run the ITP generation workflow using project_id and optional PQP content and documents."""
     inputs: InputState = {
         "project_id": project_id,
         "pqp_content": pqp_content,
-        "txt_project_documents": txt_project_documents or []
+        "txt_project_documents": txt_project_documents or [],
+        "project_jurisdiction": project_jurisdiction,
     }
     result = itp_generation_rev2_graph.invoke(inputs)
     return {

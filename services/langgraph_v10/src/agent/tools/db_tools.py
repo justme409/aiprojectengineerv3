@@ -409,13 +409,54 @@ def save_document_metadata(document_id: str, document_metadata: dict) -> bool:
 
 @tool
 def fetch_reference_documents() -> list[dict]:
-    """Fetch all reference documents metadata from DB."""
+    """Fetch all reference documents metadata from DB (unfiltered)."""
     conn = get_db_connection()
     with conn.cursor() as cursor:
-        cursor.execute("SELECT id, spec_id, spec_name, org_identifier FROM reference_documents ORDER BY org_identifier, spec_id")
+        cursor.execute("SELECT id, spec_id, spec_name, jurisdiction, org_identifier FROM reference_documents ORDER BY spec_id")
         results = cursor.fetchall()
     conn.close()
-    return [{"id": str(r[0]), "spec_id": r[1], "spec_name": r[2], "org_identifier": r[3]} for r in results]
+    return [{"id": str(r[0]), "spec_id": r[1], "spec_name": r[2], "jurisdiction": r[3], "org_identifier": r[4]} for r in results]
+
+@tool
+def fetch_reference_documents_by_jurisdiction(project_jurisdiction: str) -> list[dict]:
+    """Fetch reference documents filtered by jurisdiction plus Australia-wide.
+
+    - project_jurisdiction: normalized AU code (QLD, NSW, TAS, SA, VIC, WA, NT, ACT)
+    """
+    if not project_jurisdiction:
+        return []
+    code = (project_jurisdiction or '').upper()
+    name_map = {
+        'QLD': 'Queensland',
+        'NSW': 'New South Wales',
+        'TAS': 'Tasmania',
+        'SA': 'South Australia',
+        'VIC': 'Victoria',
+        'WA': 'Western Australia',
+        'NT': 'Northern Territory',
+        'ACT': 'Australian Capital Territory',
+    }
+    full_name = name_map.get(code, code)
+
+    conn = get_db_connection()
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT id, spec_id, spec_name, jurisdiction, org_identifier
+            FROM reference_documents
+            WHERE (
+                jurisdiction ILIKE %s OR jurisdiction ILIKE %s
+            )
+            OR (
+                jurisdiction ILIKE 'Australia%%' OR jurisdiction ILIKE 'Australia /%%' OR jurisdiction ILIKE 'Australia,%%' OR jurisdiction ILIKE 'Australia;%%' OR jurisdiction ILIKE 'Australia%%New Zealand' OR jurisdiction IS NULL
+            )
+            ORDER BY spec_id
+            """,
+            (f"%{code}%", f"%{full_name}%"),
+        )
+        results = cursor.fetchall()
+    conn.close()
+    return [{"id": str(r[0]), "spec_id": r[1], "spec_name": r[2], "jurisdiction": r[3], "org_identifier": r[4]} for r in results]
 
 @tool
 def fetch_standard_document_content(spec_ids: list[str]) -> list[dict]:
@@ -428,11 +469,11 @@ def fetch_standard_document_content(spec_ids: list[str]) -> list[dict]:
         placeholders = ','.join(['%s'] * len(spec_ids))
         cursor.execute(
             f"""
-            SELECT rd.id, rd.spec_id, rd.spec_name, rd.org_identifier,
+            SELECT rd.id, rd.spec_id, rd.spec_name, rd.org_identifier, rd.jurisdiction,
                    COALESCE(rd.content_raw, '') AS content
             FROM reference_documents rd
             WHERE rd.spec_id = ANY(%s)
-            ORDER BY rd.org_identifier, rd.spec_id
+            ORDER BY rd.spec_id
             """,
             (spec_ids,)
         )
@@ -444,7 +485,8 @@ def fetch_standard_document_content(spec_ids: list[str]) -> list[dict]:
             "spec_id": r[1],
             "spec_name": r[2],
             "org_identifier": r[3],
-            "content": r[4]
+            "jurisdiction": r[4],
+            "content": r[5]
         }
         for r in results
     ]

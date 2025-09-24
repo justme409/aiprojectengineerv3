@@ -28,10 +28,20 @@ export default function ClientItpTemplateList({ projectId }: ClientItpTemplateLi
 
   const fetchTemplates = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/projects/${projectId}/quality/itp-templates`)
+      // Use itp-register API and map to template-like rows for portal
+      const response = await fetch(`/api/v1/projects/${projectId}/quality/itp-register`)
       if (response.ok) {
         const data = await response.json()
-        setTemplates(data.templates || [])
+        const rows = (data.itpRegister || data.itp_register || data.templates || []).map((r: any) => ({
+          id: r.id || r.itp_asset_id,
+          name: r.name,
+          version: r.version || r.content?.version || 1,
+          approval_state: r.approval_state || r.status || 'draft',
+          jurisdiction_coverage_status: r.jurisdiction_coverage_status || r.content?.coverage || 'unknown',
+          required_points_present: String(r.required_points_present ?? true),
+          created_at: r.created_at || new Date().toISOString(),
+        }))
+        setTemplates(rows)
       }
     } catch (error) {
       console.error('Error fetching ITP templates:', error)
@@ -81,7 +91,7 @@ export default function ClientItpTemplateList({ projectId }: ClientItpTemplateLi
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">ITP Templates</h1>
+        <h1 className="text-3xl font-bold">ITP Templates Register</h1>
         <Button variant="outline">Download All</Button>
       </div>
 
@@ -118,7 +128,7 @@ export default function ClientItpTemplateList({ projectId }: ClientItpTemplateLi
 
       <Card>
         <CardHeader>
-          <CardTitle>ITP Templates</CardTitle>
+          <CardTitle>ITP Templates Register</CardTitle>
         </CardHeader>
         <CardContent>
           {templates.length === 0 ? (

@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
-import { Settings, Shield, Users, Database, Bell, Save } from 'lucide-react'
+import { Settings, Shield, Users, Database, Bell, Save, Plus, Trash2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface ProjectSettings {
   name: string
@@ -47,6 +51,10 @@ export default function ProjectSettingsPage() {
   const [activeTab, setActiveTab] = useState('general')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string, user_id: string, email: string, permissions: string[] }>>([])
+  const [newMemberEmail, setNewMemberEmail] = useState('')
+  const PERMS = ['read','write','approve','settings','admin','portal_client','site'] as const
 
   const fetchProjectSettings = useCallback(async () => {
     try {
@@ -74,6 +82,111 @@ export default function ProjectSettingsPage() {
   useEffect(() => {
     fetchProjectSettings()
   }, [fetchProjectSettings])
+
+  // Fetch team when Team tab active
+  useEffect(() => {
+    if (activeTab !== 'team') return
+    let mounted = true
+    ;(async () => {
+      try {
+        setTeamLoading(true)
+        const res = await fetch(`/api/v1/projects/${projectId}/team`, { cache: 'no-store' })
+        if (!mounted) return
+        if (res.ok) {
+          const json = await res.json()
+          setTeamMembers(json.members || [])
+        }
+      } finally {
+        if (mounted) setTeamLoading(false)
+      }
+    })()
+    return () => { mounted = false }
+  }, [activeTab, projectId])
+
+  const togglePerm = (idx: number, perm: string) => {
+    setTeamMembers(prev => {
+      const copy = [...prev]
+      const row = { ...copy[idx] }
+      const cur = new Set(row.permissions || [])
+      if (cur.has(perm)) cur.delete(perm); else cur.add(perm)
+      row.permissions = Array.from(cur)
+      copy[idx] = row
+      return copy
+    })
+  }
+
+  const applyPreset = (idx: number, preset: 'admin'|'client'|'contractor'|'site') => {
+    const map: Record<string, string[]> = {
+      admin: ['read','write','approve','settings','admin'],
+      client: ['read','approve','portal_client'],
+      contractor: ['read','write'],
+      site: ['read','write','settings','site'],
+    }
+    setTeamMembers(prev => {
+      const copy = [...prev]
+      copy[idx] = { ...copy[idx], permissions: map[preset] }
+      return copy
+    })
+  }
+
+  const saveTeam = async () => {
+    setTeamLoading(true)
+    try {
+      // Persist each member's permissions (simple approach)
+      for (const m of teamMembers) {
+        await fetch(`/api/v1/projects/${projectId}/team`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: m.id, permissions: m.permissions || [] })
+        })
+      }
+      alert('Team updated')
+    } catch (e) {
+      console.error(e)
+      alert('Failed to update team')
+    } finally {
+      setTeamLoading(false)
+    }
+  }
+
+  const addMember = async () => {
+    const email = newMemberEmail.trim().toLowerCase()
+    if (!email) return
+    setTeamLoading(true)
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}/team`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, permissions: ['read'] })
+      })
+      if (res.ok) {
+        setNewMemberEmail('')
+        // refresh
+        const list = await fetch(`/api/v1/projects/${projectId}/team`, { cache: 'no-store' }).then(r => r.json())
+        setTeamMembers(list.members || [])
+      } else {
+        alert('Failed to add member')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Failed to add member')
+    } finally {
+      setTeamLoading(false)
+    }
+  }
+
+  const removeMember = async (id: string) => {
+    if (!confirm('Remove this member?')) return
+    setTeamLoading(true)
+    try {
+      const res = await fetch(`/api/v1/projects/${projectId}/team?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+      if (res.ok) {
+        setTeamMembers(prev => prev.filter(m => m.id !== id))
+      } else {
+        alert('Failed to remove member')
+      }
+    } finally { setTeamLoading(false) }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -327,13 +440,78 @@ export default function ProjectSettingsPage() {
           {activeTab === 'team' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold">Team Management</h2>
-              <div className="text-center py-12">
-                <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Team Management</h3>
-                <p className="text-gray-600 mb-4">Manage project team members and permissions</p>
-                <button className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90">
-                  Manage Team
-                </button>
+              <p className="text-sm text-gray-600">Add users by email and set permissions. No organization restriction.</p>
+
+              {/* Add member */}
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="email"
+                  value={newMemberEmail}
+                  onChange={(e) => setNewMemberEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="flex-1"
+                />
+                <Button onClick={addMember} variant="outline" size="sm" disabled={teamLoading || !newMemberEmail}>
+                  <Plus className="w-4 h-4 mr-1" /> Add
+                </Button>
+              </div>
+
+              {/* Members table */}
+              <div className="overflow-x-auto border rounded">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      {PERMS.map(p => (
+                        <TableHead key={p} className="capitalize">
+                          {p === 'portal_client' ? 'Client portal' : p === 'site' ? 'Site' : p}
+                        </TableHead>
+                      ))}
+                      <TableHead>Presets</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {teamLoading && teamMembers.length === 0 ? (
+                      <TableRow><TableCell colSpan={PERMS.length + 3} className="text-sm text-muted-foreground">Loading...</TableCell></TableRow>
+                    ) : teamMembers.length === 0 ? (
+                      <TableRow><TableCell colSpan={PERMS.length + 3} className="text-sm text-muted-foreground">No team members yet.</TableCell></TableRow>
+                    ) : (
+                      teamMembers.map((m, idx) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="text-sm">{m.email || m.user_id}</TableCell>
+                          {PERMS.map(p => (
+                            <TableCell key={p}>
+                              <Checkbox
+                                checked={(m.permissions || []).includes(p)}
+                                onCheckedChange={() => togglePerm(idx, p)}
+                              />
+                            </TableCell>
+                          ))}
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="outline" onClick={() => applyPreset(idx, 'admin')}>Admin</Button>
+                              <Button size="sm" variant="outline" onClick={() => applyPreset(idx, 'client')}>Client</Button>
+                              <Button size="sm" variant="outline" onClick={() => applyPreset(idx, 'contractor')}>Contractor</Button>
+                              <Button size="sm" variant="outline" onClick={() => applyPreset(idx, 'site')}>Site</Button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="destructive" size="sm" onClick={() => removeMember(m.id)}>
+                              <Trash2 className="w-4 h-4 mr-1" /> Remove
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={saveTeam} disabled={teamLoading} variant="default">
+                  {teamLoading ? 'Saving…' : 'Save Team Changes'}
+                </Button>
               </div>
             </div>
           )}

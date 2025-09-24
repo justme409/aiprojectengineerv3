@@ -167,7 +167,7 @@ export default function ItpTemplateListClient({
               onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
               className="h-auto p-0 font-semibold hover:bg-transparent"
             >
-              ITP Name
+              ITP Template
               {column.getIsSorted() === "asc" ? (
                 <ArrowUp className="ml-2 h-4 w-4" />
               ) : column.getIsSorted() === "desc" ? (
@@ -180,7 +180,7 @@ export default function ItpTemplateListClient({
         },
         cell: ({ row }) => (
           <Link
-            href={isClientPortal ? `/portal/${projectId}/quality/itp-templates/${row.original.id}` : `/projects/${projectId}/quality/itp-templates/${row.original.id}`}
+            href={isClientPortal ? `/portal/${projectId}/quality/itp-templates-register/${row.original.id}` : `/projects/${projectId}/quality/itp-templates-register/${row.original.id}`}
             className="block hover:underline cursor-pointer text-gray-600 hover:text-gray-800"
             onClick={(e) => {
               e.stopPropagation();
@@ -215,8 +215,8 @@ export default function ItpTemplateListClient({
           )
         },
         cell: ({ row }) => (
-          <Link
-            href={isClientPortal ? `/portal/${projectId}/quality/itp-templates/${row.original.id}` : `/projects/${projectId}/quality/itp-templates/${row.original.id}`}
+        <Link
+            href={isClientPortal ? `/portal/${projectId}/quality/itp-templates-register/${row.original.id}` : `/projects/${projectId}/quality/itp-templates-register/${row.original.id}`}
             className="block hover:underline cursor-pointer text-gray-600 hover:text-gray-800 font-mono text-sm"
             onClick={(e) => {
               e.stopPropagation();
