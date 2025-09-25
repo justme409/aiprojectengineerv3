@@ -97,3 +97,6 @@ MANIFEST
 # LangGraph
 services/langgraph_v10/.langgraph_api/
 *.pckl
+
+# Large files
+before_project_purge.sql
