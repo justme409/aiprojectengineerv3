@@ -1,7 +1,8 @@
 import os
 import json
-from typing_extensions import TypedDict
-from typing import List, Dict, Any, Optional, Literal
+import logging
+from typing_extensions import TypedDict, NotRequired
+from typing import List, Dict, Any, Optional, Literal, Tuple
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -11,13 +12,16 @@ from agent.prompts.ohsmp_prompt import PROMPT as OHSMP_PROMPT
 from agent.prompts.tmp_prompt import PROMPT as TMP_PROMPT
 from agent.prompts.construction_program_prompt import PROMPT as CONSTR_PROMPT
 from agent.tools.db_tools import (
-    fetch_all_project_documents,
+    fetch_organization_id_for_project,
+    fetch_qse_assets_for_org,
 )
 from agent.prompts.qse_system import QSE_SYSTEM_NODES, QSE_SYSTEM_SUMMARY
 from agent.tools.action_graph_repo import (
     upsertAssetsAndEdges,
     IdempotentAssetWriteSpec,
 )
+
+logger = logging.getLogger(__name__)
 
 llm = ChatGoogleGenerativeAI(
     model=os.getenv("GEMINI_MODEL_2"),
@@ -62,11 +66,14 @@ ENGINEERING_IMPLEMENTATION_DIRECTIVE = (
 
 QSE_REFERENCING_DIRECTIVE = (
     "\n\nQSE REFERENCING RULES (Corporate System Citations):"
-    "\n- When you rely on corporate QSE documents (policy, procedure, register, form, template), cite their exact 'document_number' from QSE_SYSTEM_NODES."
-    "\n- Provide inline citations near relevant paragraphs like (Ref: QSE-7.5-PROC-01) or (Ref: QSE-8.1-TEMP-ITP)."
+    "\n- Use the IMS DOCUMENTS block provided (sourced from the organisation's asset registry) to ground every corporate reference."
+    "\n- Cite documents by their exact 'document_number' and hyperlink the document title to the supplied URL (e.g., <a class=\"qse-link\" href=\"https://projectpro.pro/qse/corp-documentation\">Procedure for Control of Documented Information</a>)."
+    "\n- Reference these documents in context (e.g., 'Controlled via the <a class=\"qse-link\" href=\"...\">QSE-7.5-PROC-01 Procedure for Control of Documented Information</a>'). Do NOT copy or restate the full content of the IMS documents."
+    "\n- Provide inline citations near relevant paragraphs like (Ref: QSE-7.5-PROC-01) in addition to hyperlinks."
     "\n- Include a final <h2 id=\"sec-references\">References</h2> section listing all cited QSE items as a bulleted list:"
     "\n  • Format: <li><b>QSE-7.5-PROC-01</b> — Procedure for Control of Documented Information (path: /qse/corp-documentation)</li>"
-    "\n- Do NOT invent document numbers. Only use values that exist in QSE_SYSTEM_NODES."
+    "\n- If any IMS items are missing from the organisation's assets, explicitly note the gap and recommend sourcing the controlled copy from the corporate IMS."
+    "\n- Do NOT invent document numbers. Only use values that exist in QSE_SYSTEM_NODES or the IMS DOCUMENTS block."
 )
 
 NUMBERING_AND_ARTIFACTS_DIRECTIVE = (
@@ -75,13 +82,18 @@ NUMBERING_AND_ARTIFACTS_DIRECTIVE = (
     "\n  • Render as an unordered list under an <h2>Contents</h2> heading."
     "\n  • Each list item must link to the corresponding section via #anchors (e.g., <a href=\"#sec-1\">1. General</a>)."
     "\n- USE DECIMAL SECTION NUMBERING for headings:"
-    "\n  • <h1> for the document title (unnumbered)."
-    "\n  • <h2> for top-level sections numbered 1, 2, 3, ... (e.g., '1. General')."
-    "\n  • <h3> for subsections numbered 1.1, 1.2, 2.1, ... according to their parent section."
+    "\n  • <h1 class=\"plan-heading\"> for the document title (unnumbered)."
+    "\n  • <h2 class=\"plan-heading\"> for top-level sections numbered 1, 2, 3, ... (e.g., '1. General')."
+    "\n  • <h3 class=\"plan-subheading\"> for subsections numbered 1.1, 1.2, 2.1, ... according to their parent section."
     "\n- Add stable id attributes to each numbered heading to support anchor links (e.g., <h2 id=\"sec-1\">1. General</h2>, <h3 id=\"sec-1-1\">1.1 Purpose</h3>)."
     "\n- Strip any numbering found in source documents BEFORE applying the new consistent numbering scheme."
     "\n- Do NOT include page numbers or pagination artifacts."
     "\n- Only include actual plan content. Exclude redundant layout metadata from source documents."
+    "\n- Wrap the entire generated body inside a single <article class=\"plan plan-quality\" style=\"font-family:'Inter',sans-serif;font-size:15px;line-height:1.7;color:#111827;\"> container: open it before the title and close it at the very end."
+    "\n- Insert a <style> block immediately after opening <article> defining shared classes (.plan-heading, .plan-subheading, .plan-section, .plan-subsection, .plan-table, .qse-link) consistent with the typography guidance (e.g., .plan-heading {font-weight:600;font-size:1.35rem; margin-top:2rem;}, .plan-table {border-collapse:collapse;width:100%;}, .qse-link {color:#2563eb;text-decoration:underline;})."
+    "\n- Enclose each top-level numbered section within matching <section class=\"plan-section\">...</section> tags and nest each <h3> block (and its content) inside <section class=\"plan-subsection\">...</section> to keep markup tidy."
+    "\n- Render QSE references as clickable anchors (e.g., <a class=\"qse-link\" href=\"https://projectpro.pro/qse/corp-documentation\">Procedure for Control of Documented Information</a>) and never emit raw JSON objects such as {\"type\":\"link\"}."
+    "\n- Add class=\"lead\" to the first paragraph within each top-level section and class=\"plan-table\" to every <table> for improved readability without heavy styling."
 )
 
 PLAN_TO_COLUMN = {
@@ -99,6 +111,253 @@ PLAN_TO_PROMPT = {
     "tmp": TMP_PROMPT,
     # "construction_program": CONSTR_PROMPT,  # temporarily disabled
 }
+
+PLAN_QSE_DOCUMENTS: Dict[str, List[str]] = {
+    "pqp": [
+        "QSE-1-MAN-01",
+        "QSE-5.2-POL-01",
+        "QSE-7.2-PROC-01",
+        "QSE-7.2-REG-01",
+        "QSE-7.5-PROC-01",
+        "QSE-7.5-REG-01",
+        "QSE-8.1-PROC-06",
+        "QSE-8.1-PROC-07",
+        "QSE-8.1-TEMP-ITP",
+        "QSE-9.2-PROC-01",
+        "QSE-10.2-PROC-01",
+        "QSE-10.2-REG-01",
+        "QSE-10.3-PROC-01",
+    ],
+    "emp": [
+        "QSE-1-MAN-01",
+        "QSE-5.2-POL-01",
+        "QSE-5.3-REG-01",
+        "QSE-6.1-PROC-01",
+        "QSE-6.1-PROC-02",
+        "QSE-6.1-REG-03",
+        "QSE-7.2-PROC-01",
+        "QSE-7.2-TEMP-01",
+        "QSE-7.5-PROC-01",
+        "QSE-8.1-PROC-02",
+        "QSE-8.1-TEMP-01",
+        "QSE-8.1-TEMP-03",
+        "QSE-8.1-TEMP-04",
+        "QSE-8.1-TEMP-EMP",
+        "QSE-9.2-PROC-01",
+        "QSE-10.3-PROC-01",
+    ],
+    "ohsmp": [
+        "QSE-1-MAN-01",
+        "QSE-5.3-REG-01",
+        "QSE-5.4-PROC-01",
+        "QSE-5.4-FORM-01",
+        "QSE-6.1-PROC-01",
+        "QSE-6.1-PROC-02",
+        "QSE-6.1-REG-03",
+        "QSE-7.2-PROC-01",
+        "QSE-7.2-REG-01",
+        "QSE-7.5-PROC-01",
+        "QSE-8.1-PROC-02",
+        "QSE-8.1-PROC-03",
+        "QSE-8.1-PROC-07",
+        "QSE-8.1-TEMP-01",
+        "QSE-8.1-TEMP-03",
+        "QSE-8.1-TEMP-04",
+        "QSE-8.1-TEMP-SWMS",
+        "QSE-8.1-TEMP-TMP",
+        "QSE-9.2-PROC-01",
+        "QSE-9.2-SCHED-01",
+        "QSE-10.2-PROC-01",
+        "QSE-10.2-REG-01",
+    ],
+    "tmp": [
+        "QSE-5.3-REG-01",
+        "QSE-6.1-PROC-01",
+        "QSE-7.2-PROC-01",
+        "QSE-7.4-PROC-01",
+        "QSE-7.5-PROC-01",
+        "QSE-8.1-PROC-02",
+        "QSE-8.1-TEMP-01",
+        "QSE-9.2-PROC-01",
+        "QSE-10.2-PROC-01",
+    ],
+}
+
+QSE_DOC_NODE_INDEX: Dict[str, Dict[str, Any]] = {
+    node.get("document_number"): node
+    for node in QSE_SYSTEM_NODES
+    if node.get("document_number")
+}
+
+QSE_BASE_URL = "https://projectpro.pro"
+
+
+def _normalize_doc_number(doc_id: str) -> str:
+    return doc_id.strip().upper()
+
+
+def _required_docs_for_plan(plan_type: str) -> List[str]:
+    docs = PLAN_QSE_DOCUMENTS.get(plan_type, [])
+    return [_normalize_doc_number(d) for d in docs]
+
+
+def _build_asset_index_by_doc_number(assets: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    index: Dict[str, Dict[str, Any]] = {}
+    for asset in assets:
+        candidates = [
+            asset.get("document_number"),
+        ]
+        metadata = asset.get("metadata") or {}
+        if isinstance(metadata, dict):
+            candidates.append(metadata.get("document_number"))
+            qse_doc_meta = metadata.get("qse_doc")
+            if isinstance(qse_doc_meta, dict):
+                candidates.append(qse_doc_meta.get("code"))
+        candidates.append(asset.get("name"))
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate.strip():
+                normalized = _normalize_doc_number(candidate)
+                if normalized not in index:
+                    index[normalized] = asset
+                break
+    return index
+
+
+def _resolve_qse_url(doc_number: str) -> Optional[str]:
+    node = QSE_DOC_NODE_INDEX.get(doc_number)
+    if node and node.get("path"):
+        return f"{QSE_BASE_URL}{node['path']}"
+    return None
+
+
+def _resolve_qse_title(doc_number: str, asset: Optional[Dict[str, Any]]) -> str:
+    if asset and isinstance(asset.get("name"), str) and asset["name"].strip():
+        return asset["name"].strip()
+    node = QSE_DOC_NODE_INDEX.get(doc_number)
+    if node and isinstance(node.get("title"), str):
+        return node["title"]
+    return doc_number
+
+
+def _format_qse_reference_block(plan_type: str, organization_id: Optional[str], references: List[Dict[str, Any]]) -> str:
+    if not references:
+        org_label = organization_id or "unknown"
+        return (
+            f"- No IMS assets located for organisation {org_label}. Cite the corporate QSE documents using the QSE system adjacency list."
+        )
+
+    lines: List[str] = []
+    for ref in references:
+        url = ref.get("url") or "(no path provided)"
+        status = "" if ref.get("asset_present") else " [MISSING IN ASSETS — reference corporate IMS repository]"
+        title = ref.get("title") or ref["document_number"]
+        lines.append(f"- {ref['document_number']} — {title} (url: {url}){status}")
+    return "\n".join(lines)
+
+
+def _format_qse_content_block(plan_type: str, organization_id: Optional[str], assets: List[Dict[str, Any]]) -> str:
+    """Include the actual HTML content of QSE documents in the prompt."""
+    if not assets:
+        org_label = organization_id or "unknown"
+        return (
+            f"- No QSE document content available for organisation {org_label}. "
+            "Use QSE system adjacency list descriptions as guidance."
+        )
+
+    content_blocks: List[str] = []
+    for asset in assets:
+        doc_number = asset.get("document_number", "Unknown")
+        title = asset.get("name", doc_number)
+        content = asset.get("content", {})
+
+        # Extract HTML content
+        html_content = ""
+        if isinstance(content, dict):
+            html_content = content.get("html", "")
+        elif isinstance(content, str):
+            try:
+                import json
+                content_dict = json.loads(content)
+                html_content = content_dict.get("html", "")
+            except:
+                html_content = content
+
+        if html_content:
+            content_blocks.append(f"## {doc_number}: {title}\n\n{html_content}")
+        else:
+            content_blocks.append(f"## {doc_number}: {title}\n\n[No HTML content available]")
+
+    return "\n\n".join(content_blocks)
+
+
+def _build_qse_references_for_plan(organization_id: Optional[str], plan_type: str) -> List[Dict[str, Any]]:
+    if not organization_id:
+        raise ValueError("organization_id required for QSE reference building (no fallback)")
+
+    required_docs = _required_docs_for_plan(plan_type)
+    if not required_docs:
+        raise ValueError(f"No required QSE documents defined for plan type: {plan_type}")
+
+    assets = fetch_qse_assets_for_org(organization_id, required_docs)
+
+    assets_by_doc = _build_asset_index_by_doc_number(assets)
+    references: List[Dict[str, Any]] = []
+    for doc in required_docs:
+        asset = assets_by_doc.get(doc)
+        title = _resolve_qse_title(doc, asset)
+        url = _resolve_qse_url(doc)
+        references.append(
+            {
+                "document_number": doc,
+                "title": title,
+                "url": url,
+                "asset_present": asset is not None,
+                "asset_id": asset.get("id") if asset else None,
+                "asset_name": asset.get("name") if asset else None,
+                "organization_id": organization_id,
+            }
+        )
+    return references
+
+
+def _prepare_qse_context(state: Dict[str, Any], plan_type: str) -> Tuple[Dict[str, Any], str, str]:
+    organization_id = state.get("organization_id")
+    if not organization_id:
+        try:
+            organization_id = fetch_organization_id_for_project(state["project_id"])
+        except Exception as exc:  # pragma: no cover - defensive logging
+            logger.warning(
+                "Unable to resolve organisation for project %s: %s", state["project_id"], exc
+            )
+            organization_id = None
+
+    reference_cache = dict(state.get("qse_references") or {})
+    if plan_type in reference_cache:
+        references = reference_cache[plan_type]
+    else:
+        references = _build_qse_references_for_plan(organization_id, plan_type)
+        reference_cache[plan_type] = references
+
+    # Get the assets for content inclusion
+    required_docs = _required_docs_for_plan(plan_type)
+    assets = []
+    if organization_id and required_docs:
+        try:
+            assets = fetch_qse_assets_for_org(organization_id, required_docs)
+        except Exception as exc:
+            logger.warning("Failed to fetch QSE assets for content: %s", exc)
+            assets = []
+
+    reference_block = _format_qse_reference_block(plan_type, organization_id, references)
+    content_block = _format_qse_content_block(plan_type, organization_id, assets)
+
+    updated_state = {
+        **state,
+        "organization_id": organization_id,
+        "qse_references": reference_cache,
+    }
+    return updated_state, reference_block, content_block
+
 
 def _default_category_and_tags_for_plan_type(plan_type: str) -> Dict[str, Any]:
     mapping: Dict[str, Dict[str, Any]] = {
@@ -124,6 +383,8 @@ class PlanGenerationState(TypedDict):
     plan_html: Optional[str]
     error: Optional[str]
     generated_plans: List[Dict[str, Any]]
+    organization_id: NotRequired[Optional[str]]
+    qse_references: NotRequired[Dict[str, List[Dict[str, Any]]]]
 
 class InputState(TypedDict):
     project_id: str
@@ -131,10 +392,15 @@ class InputState(TypedDict):
     plan_type: Optional[str]
     # documents must be provided upstream; this graph does not fetch
     txt_project_documents: List[Dict[str, Any]]
+    organization_id: NotRequired[Optional[str]]
+    qse_references: NotRequired[Dict[str, List[Dict[str, Any]]]]
 
 class OutputState(TypedDict):
     generated_plans: List[Dict[str, Any]]
     plan_html: Optional[str]
+    organization_id: NotRequired[Optional[str]]
+    qse_references: NotRequired[Dict[str, List[Dict[str, Any]]]]
+
 
 def fetch_docs_node(state: PlanGenerationState) -> PlanGenerationState:
     # Use the txt_project_documents that were already extracted by document_extraction.py
@@ -145,8 +411,11 @@ def fetch_docs_node(state: PlanGenerationState) -> PlanGenerationState:
     raise ValueError("txt_project_documents missing; provide extracted documents upstream (no DB fallback)")
 
 def generate_plan_node(state: PlanGenerationState) -> PlanGenerationState:
-    docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
     plan_type = state.get("plan_type") or "pqp"
+    state, ims_block, qse_content_block = _prepare_qse_context(state, plan_type)
+    docs_text = "\n\n".join(
+        [f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]]
+    )
     system_prompt = PLAN_TO_PROMPT[plan_type]
     qse_context = json.dumps(QSE_SYSTEM_NODES)
     qse_summary = QSE_SYSTEM_SUMMARY
@@ -159,6 +428,8 @@ def generate_plan_node(state: PlanGenerationState) -> PlanGenerationState:
         f"{system_prompt}\n\n"
         f"QSE SYSTEM SUMMARY:\n{qse_summary}\n\n"
         f"QSE SYSTEM REFERENCE (adjacency list):\n{qse_context}\n\n"
+        f"IMS DOCUMENTS ({plan_type.upper()} PLAN FOCUS):\n{ims_block}\n\n"
+        f"QSE DOCUMENT CONTENT ({plan_type.upper()} PLAN):\n{qse_content_block}\n\n"
         f"PROJECT DOCUMENTS:\n{docs_text}"
         f"{VERBOSITY_DIRECTIVE}"
         f"{ENGINEERING_IMPLEMENTATION_DIRECTIVE}"
@@ -172,7 +443,10 @@ def generate_plan_node(state: PlanGenerationState) -> PlanGenerationState:
     return {**state, "plan_html": html, "plan_type": plan_type}
 
 def _generate_plan_for_type(plan_type: str, state: PlanGenerationState) -> PlanGenerationState:
-    docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
+    state, ims_block, qse_content_block = _prepare_qse_context(state, plan_type)
+    docs_text = "\n\n".join(
+        [f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]]
+    )
     system_prompt = PLAN_TO_PROMPT[plan_type]
     qse_context = json.dumps(QSE_SYSTEM_NODES)
     qse_summary = QSE_SYSTEM_SUMMARY
@@ -185,6 +459,8 @@ def _generate_plan_for_type(plan_type: str, state: PlanGenerationState) -> PlanG
         f"{system_prompt}\n\n"
         f"QSE SYSTEM SUMMARY:\n{qse_summary}\n\n"
         f"QSE SYSTEM REFERENCE (adjacency list):\n{qse_context}\n\n"
+        f"IMS DOCUMENTS ({plan_type.upper()} PLAN FOCUS):\n{ims_block}\n\n"
+        f"QSE DOCUMENT CONTENT ({plan_type.upper()} PLAN):\n{qse_content_block}\n\n"
         f"PROJECT DOCUMENTS:\n{docs_text}"
         f"{VERBOSITY_DIRECTIVE}"
         f"{ENGINEERING_IMPLEMENTATION_DIRECTIVE}"
@@ -274,12 +550,17 @@ class SeqState(TypedDict):
     txt_project_documents: List[Dict[str, Any]]
     # results: append minimal summaries per plan
     results: List[Dict[str, Any]]
+    organization_id: NotRequired[Optional[str]]
+    qse_references: NotRequired[Dict[str, List[Dict[str, Any]]]]
 
 class SeqInput(TypedDict):
     project_id: str
+    organization_id: NotRequired[Optional[str]]
 
 class SeqOutput(TypedDict):
     results: List[Dict[str, Any]]
+    organization_id: NotRequired[Optional[str]]
+    qse_references: NotRequired[Dict[str, List[Dict[str, Any]]]]
 
 def seq_fetch_docs_node(state: SeqState) -> SeqState:
     # Use the txt_project_documents that were already extracted by document_extraction.py
@@ -289,20 +570,29 @@ def seq_fetch_docs_node(state: SeqState) -> SeqState:
         return {**state, "results": state.get("results", [])}
     raise ValueError("txt_project_documents missing; sequencer requires upstream extraction (no DB fallback)")
 
-def _gen_and_save(plan_type: str, state: SeqState) -> Dict[str, Any]:
-    docs_text = "\n\n".join([f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]])
+def _gen_and_save(plan_type: str, state: SeqState) -> SeqState:
+    state, ims_block, qse_content_block = _prepare_qse_context(state, plan_type)
+    docs_text = "\n\n".join(
+        [f"Document: {d['file_name']} (ID: {d['id']})\n{d['content']}" for d in state["txt_project_documents"]]
+    )
     system_prompt = PLAN_TO_PROMPT[plan_type]
     qse_context = json.dumps(QSE_SYSTEM_NODES)
+    qse_summary = QSE_SYSTEM_SUMMARY
     output_instructions = (
         "\n\nOUTPUT FORMAT (STRICT): Return JSON with a single field 'html' that contains the FINAL HTML BODY ONLY. "
-        "Do NOT include <html>, <head>, or <body> tags. Use semantic HTML elements (h1-h3, p, ul/ol, table, a)."
+        "Do NOT include <html>, <head>, or <body> tags. Use semantic HTML elements (h1-h3, p, ul/ol, table, a). "
+        "Render a complete, professional management plan suitable for direct display and TinyMCE editing."
     )
     prompt = (
         f"{system_prompt}\n\n"
+        f"QSE SYSTEM SUMMARY:\n{qse_summary}\n\n"
         f"QSE SYSTEM REFERENCE (adjacency list):\n{qse_context}\n\n"
+        f"IMS DOCUMENTS ({plan_type.upper()} PLAN FOCUS):\n{ims_block}\n\n"
+        f"QSE DOCUMENT CONTENT ({plan_type.upper()} PLAN):\n{qse_content_block}\n\n"
         f"PROJECT DOCUMENTS:\n{docs_text}"
         f"{VERBOSITY_DIRECTIVE}"
         f"{ENGINEERING_IMPLEMENTATION_DIRECTIVE}"
+        f"{QSE_REFERENCING_DIRECTIVE}"
         f"{NUMBERING_AND_ARTIFACTS_DIRECTIVE}"
         f"{output_instructions}"
     )
@@ -330,23 +620,24 @@ def _gen_and_save(plan_type: str, state: SeqState) -> Dict[str, Any]:
         edges=[],
     )
     upsertAssetsAndEdges([spec])
-    return {"plan_type": plan_type, "title": f"{plan_type.upper()} Plan"}
+    summary = {"plan_type": plan_type, "title": f"{plan_type.upper()} Plan"}
+    results = [*(state.get("results") or []), summary]
+    return {**state, "results": results}
 
 def seq_generate_pqp_node(state: SeqState) -> SeqState:
-    summary = _gen_and_save("pqp", state)
-    return {**state, "results": [*state["results"], summary]}
+    return _gen_and_save("pqp", state)
+
 
 def seq_generate_emp_node(state: SeqState) -> SeqState:
-    summary = _gen_and_save("emp", state)
-    return {**state, "results": [*state["results"], summary]}
+    return _gen_and_save("emp", state)
+
 
 def seq_generate_ohsmp_node(state: SeqState) -> SeqState:
-    summary = _gen_and_save("ohsmp", state)
-    return {**state, "results": [*state["results"], summary]}
+    return _gen_and_save("ohsmp", state)
+
 
 def seq_generate_tmp_node(state: SeqState) -> SeqState:
-    summary = _gen_and_save("tmp", state)
-    return {**state, "results": [*state["results"], summary]}
+    return _gen_and_save("tmp", state)
 
 def seq_generate_constr_node(state: SeqState) -> SeqState:
     # Temporarily skip construction program generation

@@ -8,6 +8,7 @@ Structured output requirements:
 - Be exhaustive, implementable, and field-usable. Avoid redundancy but prefer complete, practitioner-level detail over brevity.
 - Do NOT prefix any titles with numbers (e.g., no "1.", "1.0", "5.1"). Strip numbering embedded in source headings.
 - Exclude table-of-contents or PDF artifacts (e.g., "Contents", "Print", page numbers) from titles and content.
+- Omit contract identifiers entirely unless the exact value is expressly quoted in the PROJECT DOCUMENTS; never fabricate or restate "Contract No" fields.
 
 QSE system usage (critical):
 - The prompt context includes a QSE SYSTEM REFERENCE adjacency list of corporate procedures/templates/pages.
@@ -170,4 +171,3 @@ ITP Handling: When extracting lists of ITPs (Inspection and Test Plans), copy th
   ]
 }
 """
-
