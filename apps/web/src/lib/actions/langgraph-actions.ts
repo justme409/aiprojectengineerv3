@@ -16,26 +16,32 @@ import { upsertAssetsAndEdges } from '@/lib/actions/graph-repo'
  *   LangGraph service, then pass the new key as assistant_id at invocation time.
  */
 
-export async function triggerProjectProcessingViaLangGraphEnhanced(projectId: string, _documentIds?: string[]) {
+export async function triggerProjectProcessingViaLangGraphEnhanced(projectId: string, documentIds?: string[]) {
 	// 1) Create a thread on LangGraph 2024
 	const thread = await createThread()
 	const threadId = (thread as any)?.id ?? (thread as any)?.thread_id
 
 	// 2) Start a run on that thread using ONLY the project id (assistant_id required by 2024 server)
-	const run = await startThreadRun(threadId, 'orchestrator', { project_id: projectId })
+	const runInput: Record<string, unknown> = { project_id: projectId }
+	if (documentIds && documentIds.length > 0) {
+		runInput.document_ids = documentIds
+	}
+	const run = await startThreadRun(threadId, 'orchestrator', runInput)
 	const runId = (run as any)?.id ?? (run as any)?.run_id
 	const runStatus = (run as any)?.status
 
 	// Record processing run row
+	const runParams = { graph: 'orchestrator', document_ids: documentIds ?? [] }
 	const inserted = await query(
 		`INSERT INTO public.processing_runs (id, run_uid, project_id, agent_id, model, prompt_hash, params, thread_id, run_id, status)
 		 VALUES (gen_random_uuid(), gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING run_uid`,
-		[projectId, 'langgraph_2024', 'orchestrator', 'hash:na', { graph: 'orchestrator' }, threadId, runId, runStatus]
+		[projectId, 'langgraph_2024', 'orchestrator', 'hash:na', runParams, threadId, runId, runStatus]
 	)
 	const run_uid: string = inserted.rows?.[0]?.run_uid
 
 	// 3) Create a processing_run asset and link project context for provenance
+	const processingRunIdempotencyKey = `processing_run:${runId}`
 	const processingRunSpec = {
 		asset: {
 			type: 'processing_run',
@@ -45,11 +51,12 @@ export async function triggerProjectProcessingViaLangGraphEnhanced(projectId: st
 				thread_id: threadId,
 				run_id: runId,
 				graph: 'orchestrator',
+				document_ids: documentIds ?? [],
 			},
 			status: 'draft',
 		},
 		edges: [],
-		idempotency_key: `processing_run:${runId}`,
+		idempotency_key: processingRunIdempotencyKey,
 		audit_context: { action: 'trigger_processing_run' },
 	} as any
 
@@ -58,8 +65,8 @@ export async function triggerProjectProcessingViaLangGraphEnhanced(projectId: st
 
 	// Link project context only (no document INPUT_TO edges)
 	await upsertAssetsAndEdges({
-		asset: { id: projectId },
-		idempotency_key: `NOOP-${projectId}`,
+		asset: { id: processingRunAssetId, type: 'processing_run', project_id: projectId },
+		idempotency_key: processingRunIdempotencyKey,
 		edges: [
 			{
 				from_asset_id: projectId as any,

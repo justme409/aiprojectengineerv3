@@ -6,7 +6,6 @@ from uuid import UUID
 from agent.tools.azure_tools import generate_sas_token, extract_document_content_async
 from agent.tools.db_fetcher import db_fetcher_step
 from agent.tools.action_graph_repo import upsertAssetsAndEdges, IdempotentAssetWriteSpec
-from langgraph.types import interrupt
 
 logger = logging.getLogger(__name__)
 
@@ -304,17 +303,11 @@ def create_document_extraction_graph():
     graph.add_node("extract", document_extraction_node)
     graph.add_node("persist_assets", persist_assets_to_database)
 
-    # Add an inspection pause to expose subgraph state via checkpoint
-    def _pause_for_inspection(state: ExtractionState) -> Dict[str, Any]:
-        interrupt("document_extraction: inspect state and resume to continue")
-        return {}
-    graph.add_node("pause_for_inspection", _pause_for_inspection)
 
     # Define flow
     graph.set_entry_point("fetch_ids")
     graph.add_edge("fetch_ids", "extract")
     graph.add_edge("extract", "persist_assets")
-    graph.add_edge("persist_assets", "pause_for_inspection")
 
     # Inherit parent's checkpointer when embedded as a subgraph
     return graph.compile(checkpointer=True)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
+import { findQseAssetByDocId } from '../../_utils'
 
 export async function GET(
   req: Request,
@@ -28,23 +29,23 @@ export async function GET(
 
     const organizationId = orgResult.rows[0].organization_id
 
-    // Find the QSE asset by document number
-    const assetResult = await pool.query(`
-      SELECT id, content FROM public.assets
-      WHERE organization_id = $1 AND asset_type = 'qse_doc' AND name = $2
-      LIMIT 1
-    `, [organizationId, decodedDocId])
+    const asset = await findQseAssetByDocId(organizationId, decodedDocId)
 
-    if (assetResult.rows.length === 0) {
+    if (!asset) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    const asset = assetResult.rows[0]
-
-    return NextResponse.json(asset)
+    return NextResponse.json({
+      id: asset.id,
+      name: asset.name,
+      documentNumber: asset.document_number,
+      content: asset.content,
+      metadata: asset.metadata,
+      type: asset.type,
+      subtype: asset.subtype,
+    })
   } catch (error) {
     console.error('Error fetching QSE document:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

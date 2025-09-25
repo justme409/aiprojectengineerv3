@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
+import { findQseAssetByDocId } from '../../_utils'
 
 export async function GET(
   req: Request,
@@ -32,22 +33,15 @@ export async function GET(
 
     const organizationId = orgResult.rows[0].organization_id
 
-    // Find the QSE asset by document number
-    const assetResult = await pool.query(`
-      SELECT id FROM public.assets
-      WHERE organization_id = $1 AND asset_type = 'qse_doc' AND name = $2
-      LIMIT 1
-    `, [organizationId, decodedDocId])
+    const asset = await findQseAssetByDocId(organizationId, decodedDocId)
 
-    if (assetResult.rows.length === 0) {
+    if (!asset) {
       return NextResponse.json({
         revisionIdentifier: 'A',
         approverName: null,
         approvedAt: null
       })
     }
-
-    const assetId = assetResult.rows[0].id
 
     // For now, return default values since we don't have revisions/approvals tables yet
     // This can be enhanced later when those tables are implemented
@@ -65,4 +59,3 @@ export async function GET(
     })
   }
 }
-

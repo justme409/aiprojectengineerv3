@@ -3,7 +3,7 @@ import React from 'react'
 
 export default function QseExportButton({ docId }: { docId: string }) {
   const onClick = async () => {
-    const res = await fetch(`/api/qse/${encodeURIComponent(docId)}/export`)
+    const res = await fetch(`/api/v1/qse/docs/${encodeURIComponent(docId)}/export`)
     if (!res.ok) {
       alert('Failed to export DOCX')
       return

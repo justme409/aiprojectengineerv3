@@ -8,14 +8,15 @@ Structured output requirements:
 - Be exhaustive, implementable, and field-usable. Avoid redundancy but prefer complete, practitioner-level detail over brevity.
 - Do NOT prefix any titles with numbers (e.g., no "1.", "1.0", "5.1"). Strip numbering embedded in source headings.
 - Exclude table-of-contents or PDF artifacts (e.g., "Contents", "Print", page numbers) from titles and content.
-- Omit contract identifiers entirely unless the exact value is expressly quoted in the PROJECT DOCUMENTS; never fabricate or restate "Contract No" fields.
+- Omit contract identifiers entirely unless the exact value is expressly quoted in the PROJECT DOCUMENTS; never fabricate or restate "Contract No" fields. When a contract identifier is absent or uncertain, output "Not provided" rather than inventing or copying placeholders.
 
 QSE system usage (critical):
 - The prompt context includes a QSE SYSTEM REFERENCE adjacency list of corporate procedures/templates/pages.
-- Heavily leverage existing corporate procedures/templates when relevant by inserting link blocks to those items using their title and path (e.g., {"type":"link","label":"Procedure for Control of Documented Information","url":"/qse/corp-documentation"}).
+- Heavily leverage existing corporate procedures/templates when relevant by inserting link blocks to those items using their title and full absolute URL (e.g., {"type":"link","label":"Procedure for Control of Documented Information","url":"https://projectpro.pro/qse/corp-documentation"}). Construct URLs by prefixing each node `path` from QSE SYSTEM REFERENCE with "https://projectpro.pro".
 - Do not fabricate links. Only link to items present in the QSE SYSTEM REFERENCE.
 - When no relevant QSE item exists, derive content from PROJECT DOCUMENTS and best practice; you may add a short note block indicating that a project-specific procedure/template will be created.
 - Prefer cross-referencing over duplicating corporate content.
+- Render QSE references as clickable anchors (e.g., <a class="qse-link" href="https://projectpro.pro/qse/corp-documentation">Procedure for Control of Documented Information</a>) and never emit raw JSON objects such as {"type":"link"}. Reuse the shared `.qse-link` styling defined in the inline stylesheet described below.
 
 Use the most relevant jurisdictional template below (QLD, SA, VIC, NSW). If none applies, use the Generic template. Populate and expand sections based on PROJECT DOCUMENTS. Do not include any instructional text in the output; return only the final plan object.
 

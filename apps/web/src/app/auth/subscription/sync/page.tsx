@@ -1,7 +1,8 @@
-import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
+
+export const dynamic = 'force-dynamic'
 
 async function handleSubscriptionSync() {
   try {

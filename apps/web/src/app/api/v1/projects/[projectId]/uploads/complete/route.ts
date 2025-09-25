@@ -15,6 +15,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const userId = (session.user as any).id as string | undefined
+
     const { projectId } = await params
     const body = await request.json()
     // Support both shapes: { files: [{ fileName, blobName, contentType, size }] } or
@@ -33,7 +35,7 @@ export async function POST(
       const blobName = file.blobName ?? file.storage_path ?? `projects/${projectId}/${fileName}`
       const contentType = file.contentType ?? file.type ?? 'application/octet-stream'
       const size = file.size
-      const spec = {
+     const spec = {
         asset: {
           type: 'document',
           name: fileName,
@@ -48,16 +50,16 @@ export async function POST(
             size: size,
             // Reserve fields for agent outputs under asset.content
             raw_content: null,
-            document_metadata: null
+            document_metadata: null,
           },
           status: 'draft'
         },
         edges: [],
         idempotency_key: `document:${fileName}:${projectId}`,
-        audit_context: { action: 'upload_document', user_id: (session.user as any).id }
+        audit_context: { action: 'upload_document', user_id: userId }
       }
 
-      const result = await upsertAssetsAndEdges(spec, (session.user as any).id)
+      const result = await upsertAssetsAndEdges(spec, userId)
       documentAssets.push({ id: result.id, fileName })
     }
 
@@ -79,7 +81,8 @@ export async function POST(
 
       const additionResult = await triggerDocumentAdditionAgent(
         projectId,
-        documentFiles
+        documentFiles,
+        userId ?? null
       )
 
       return NextResponse.json({

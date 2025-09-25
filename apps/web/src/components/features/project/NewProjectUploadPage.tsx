@@ -1,13 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { AlertTriangle, CheckCircle, Loader2, UploadCloud, X } from 'lucide-react'
+import { AlertTriangle, Loader2, UploadCloud, X } from 'lucide-react'
 
 export type NewProjectUploadPageProps = {
   userName?: string | null
@@ -43,10 +42,6 @@ function generateWorkingTitle() {
   return `Draft Project ${date} ${time}`
 }
 
-function formatTimestamp(date = new Date()) {
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
 interface UploadEntry {
   filename: string
   blobName: string
@@ -55,20 +50,11 @@ interface UploadEntry {
   size: number
 }
 
-interface LogEntry {
-  id: string
-  message: string
-  level: 'info' | 'success' | 'warning' | 'error'
-  timestamp: string
-}
-
 export default function NewProjectUploadPage({ userName }: NewProjectUploadPageProps) {
   const router = useRouter()
   const eventSourceRef = useRef<EventSource | null>(null)
   const isMounted = useRef(true)
-  const defaultTitle = useMemo(() => generateWorkingTitle(), [])
-
-  const [workingTitle, setWorkingTitle] = useState(defaultTitle)
+  const [generatedTitle, setGeneratedTitle] = useState(() => generateWorkingTitle())
   const [files, setFiles] = useState<File[]>([])
   const [stage, setStage] = useState<Stage>('idle')
   const [statusMessage, setStatusMessage] = useState('Upload one or more project documents to begin.')
@@ -76,7 +62,6 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
   const [projectId, setProjectId] = useState<string | null>(null)
   const [runUid, setRunUid] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
-  const [logs, setLogs] = useState<LogEntry[]>([])
 
   useEffect(() => {
     return () => {
@@ -94,19 +79,7 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
     setProjectId(null)
     setRunUid(null)
     setUploadProgress({})
-    setLogs([])
-  }
-
-  const appendLog = (message: string, level: LogEntry['level'] = 'info') => {
-    setLogs((prev) => [
-      ...prev,
-      {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        message,
-        level,
-        timestamp: formatTimestamp(),
-      },
-    ].slice(-50))
+    setGeneratedTitle(generateWorkingTitle())
   }
 
   const handleFilesSelected = (fileList: FileList | null) => {
@@ -114,7 +87,9 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
     const selected = Array.from(fileList)
     setFiles(selected)
     setUploadProgress({})
-    appendLog(`Selected ${selected.length} file${selected.length === 1 ? '' : 's'} for upload.`)
+    if (selected.length > 0) {
+      setStatusMessage(`Selected ${selected.length} file${selected.length === 1 ? '' : 's'} to upload.`)
+    }
   }
 
   const removeFile = (name: string) => {
@@ -140,39 +115,39 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
         const data = payload.data || {}
         switch (eventType) {
           case 'start':
-            appendLog('Orchestrator run started.', 'info')
+            setStatusMessage('AI orchestrator is starting...')
             break
           case 'node_start':
-            appendLog(`Running ${data.node || 'step'}...`, 'info')
+            setStatusMessage(`Running ${data.node || 'AI step'}...`)
             break
           case 'node_complete':
-            appendLog(`Completed ${data.node || 'step'}.`, 'success')
+            setStatusMessage(`Completed ${data.node || 'step'}.`)
             break
           case 'complete':
-            appendLog('AI orchestration completed.', 'success')
+            setStatusMessage('AI orchestration completed.')
             setStage('completed')
             setStatusMessage('AI processing completed successfully.')
             es.close()
             eventSourceRef.current = null
             break
           case 'error':
-            appendLog(data.message || 'Orchestrator reported an error.', 'error')
+            setStatusMessage(data.message || 'Orchestrator reported an error.')
             setStage('error')
             setErrorMessage(data.error || data.message || 'Orchestrator failed.')
             es.close()
             eventSourceRef.current = null
             break
           default:
-            appendLog(`Event: ${eventType}`, 'info')
+            setStatusMessage(`Processing: ${eventType}`)
             break
         }
       } catch (parseError) {
-        appendLog('Received malformed streaming data.', 'warning')
+        setStatusMessage('Received unexpected data from orchestrator.')
       }
     }
 
     es.onerror = () => {
-      appendLog('Lost connection to orchestrator stream.', 'warning')
+      setStatusMessage('Lost connection to orchestrator stream.')
       if (eventSourceRef.current === es) {
         es.close()
         eventSourceRef.current = null
@@ -186,12 +161,11 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
       return
     }
 
-    setErrorMessage(null)
-    setLogs([])
+      setErrorMessage(null)
     setStage('creating_project')
     setStatusMessage(stageLabels.creating_project)
 
-    const title = workingTitle.trim() || generateWorkingTitle()
+    const title = generatedTitle || generateWorkingTitle()
 
     try {
       const createRes = await fetch('/api/v1/projects', {
@@ -219,7 +193,7 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
       if (!isMounted.current) return
 
       setProjectId(createdProjectId)
-      appendLog('Project workspace created.', 'success')
+      setStatusMessage('Project workspace created.')
 
       setStage('getting_upload_urls')
       setStatusMessage(stageLabels.getting_upload_urls)
@@ -254,7 +228,7 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
         throw new Error('Upload URL count does not match the selected files')
       }
 
-      appendLog('Secure upload links generated.', 'info')
+      setStatusMessage('Secure upload links generated.')
 
       setStage('uploading_documents')
       setStatusMessage(stageLabels.uploading_documents)
@@ -279,7 +253,7 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               setUploadProgress((prev) => ({ ...prev, [file.name]: 100 }))
-              appendLog(`Uploaded ${file.name}`, 'success')
+              setStatusMessage(`Uploaded ${file.name}`)
               resolve()
             } else {
               reject(new Error(`Upload failed for ${file.name} (${xhr.status})`))
@@ -322,7 +296,7 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
         ? completeData.documents.map((doc: any) => doc.id).filter(Boolean)
         : []
 
-      appendLog('Documents registered successfully.', 'success')
+      setStatusMessage('Documents registered successfully.')
 
       setStage('triggering_orchestrator')
       setStatusMessage(stageLabels.triggering_orchestrator)
@@ -346,7 +320,7 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
         throw new Error('Orchestrator response missing run identifier')
       }
 
-      appendLog('Orchestrator run started.', 'info')
+      setStatusMessage('AI orchestrator run started.')
 
       if (!isMounted.current) return
 
@@ -356,7 +330,6 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
       startStream(createdProjectId, runUidValue)
     } catch (error: any) {
       console.error('New project flow failed:', error)
-      appendLog(error?.message || 'An unexpected error occurred.', 'error')
       setErrorMessage(error?.message || 'An unexpected error occurred.')
       setStage('error')
     }
@@ -365,26 +338,15 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
   const isBusy = ['creating_project', 'getting_upload_urls', 'uploading_documents', 'registering_documents', 'triggering_orchestrator', 'processing'].includes(stage)
 
   return (
-    <div className="container mx-auto max-w-4xl space-y-6 py-6">
+    <div className="container mx-auto max-w-3xl py-8">
       <Card>
         <CardHeader>
-          <CardTitle>New Project Upload</CardTitle>
+          <CardTitle>New Project</CardTitle>
           <CardDescription>
-            {userName ? `Hi ${userName.split(' ')[0]}, ` : ''}upload key project documents and let the AI orchestrator configure the project workspace.
+            {userName ? `Hi ${userName.split(' ')[0]}, ` : ''}upload your project documents and let the AI configure the workspace.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="working-title">Working title (used until AI extracts the official project name)</Label>
-            <Input
-              id="working-title"
-              value={workingTitle}
-              onChange={(event) => setWorkingTitle(event.target.value)}
-              placeholder="e.g., Bid - Northbridge Wharf"
-              disabled={isBusy}
-            />
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="project-files">Project documents</Label>
             <label
@@ -435,34 +397,11 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button onClick={handleStart} disabled={isBusy || files.length === 0}>
-              {isBusy ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Working...
-                </>
-              ) : (
-                'Start AI Project'
-              )}
-            </Button>
-            {stage === 'error' && (
-              <Button variant="outline" onClick={reset}>
-                Reset
-              </Button>
-            )}
-            {stage === 'completed' && projectId && (
-              <Button variant="secondary" onClick={() => router.push(`/projects/${projectId}/overview`)}>
-                View Project
-              </Button>
-            )}
-          </div>
-
-          <div className="rounded border bg-muted/40 p-4 text-sm">
+          <div className="space-y-3 rounded border bg-muted/40 p-4 text-sm">
             <p className="font-medium text-foreground">Status</p>
             <p className="text-muted-foreground">{statusMessage}</p>
             {projectId && (
-              <p className="mt-1 text-xs text-muted-foreground">Project ID: {projectId}</p>
+              <p className="text-xs text-muted-foreground">Project ID: {projectId}</p>
             )}
             {runUid && (
               <p className="text-xs text-muted-foreground">Processing run: {runUid}</p>
@@ -476,33 +415,28 @@ export default function NewProjectUploadPage({ userName }: NewProjectUploadPageP
             </div>
           )}
         </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity log</CardTitle>
-          <CardDescription>Recent steps from the upload and orchestrator run.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No activity yet.</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {logs.map((log) => (
-                <li key={log.id} className="flex items-start gap-2">
-                  {log.level === 'success' && <CheckCircle className="mt-0.5 h-4 w-4 text-green-500" />}
-                  {log.level === 'warning' && <AlertTriangle className="mt-0.5 h-4 w-4 text-amber-500" />}
-                  {log.level === 'error' && <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />}
-                  {log.level === 'info' && <Loader2 className="mt-0.5 h-4 w-4 text-muted-foreground" />}
-                  <div>
-                    <p className="font-medium text-foreground">{log.message}</p>
-                    <p className="text-xs text-muted-foreground">{log.timestamp}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
+        <div className="flex items-center gap-3 border-t bg-muted/20 p-4">
+          <Button onClick={handleStart} className="flex-1" disabled={isBusy || files.length === 0}>
+            {isBusy ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Working...
+              </>
+            ) : (
+              'Start Project'
+            )}
+          </Button>
+          {stage === 'error' && (
+            <Button variant="outline" onClick={reset}>
+              Reset
+            </Button>
           )}
-        </CardContent>
+          {stage === 'completed' && projectId && (
+            <Button variant="secondary" onClick={() => router.push(`/projects/${projectId}/overview`)}>
+              View Project
+            </Button>
+          )}
+        </div>
       </Card>
     </div>
   )

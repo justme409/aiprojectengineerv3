@@ -73,13 +73,13 @@ function TemplateInitializer() {
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const res = await fetch(`/api/qse/${encodeURIComponent(DOC_ID)}/fetch`)
+      const res = await fetch(`/api/v1/qse/docs/${encodeURIComponent(DOC_ID)}/fetch`)
       if (!mounted) return
       if (!res.ok) return
       const json = await res.json()
       const existing = (json?.content?.html || json?.content?.body || '').trim()
       if (!existing) {
-        await fetch(`/api/qse/${encodeURIComponent(DOC_ID)}/save`, {
+        await fetch(`/api/v1/qse/docs/${encodeURIComponent(DOC_ID)}/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ html: defaultHtml }),

@@ -1,4 +1,5 @@
 import psycopg2
+import psycopg2.extras
 from langchain_core.tools import tool
 import json
 import logging
@@ -121,6 +122,94 @@ def save_management_plan_to_project(project_id: str, column_name: str, plan_json
         success = cursor.rowcount > 0
     conn.close()
     return success
+
+
+def _normalize_doc_numbers(doc_numbers: list[str]) -> list[str]:
+    return [dn.strip().upper() for dn in doc_numbers if isinstance(dn, str) and dn.strip()]
+
+
+def fetch_organization_id_for_project(project_id: str) -> str | None:
+    """Return the organisation_id that owns the given project (or None)."""
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT organization_id FROM public.projects WHERE id = %s LIMIT 1",
+                (project_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            organization_id = row[0]
+            return str(organization_id) if organization_id else None
+    finally:
+        conn.close()
+
+
+def fetch_qse_assets_for_org(organization_id: str, doc_numbers: list[str]) -> list[dict]:
+    """Fetch the latest QSE assets for the given organisation filtered by document numbers."""
+    normalized = _normalize_doc_numbers(doc_numbers)
+    if not normalized:
+        return []
+
+    conn = get_db_connection()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    id,
+                    asset_uid,
+                    version,
+                    name,
+                    document_number,
+                    metadata,
+                    content,
+                    type,
+                    subtype,
+                    updated_at
+                FROM public.asset_heads
+                WHERE organization_id = %s
+                  AND (
+                    document_number = ANY(%s)
+                    OR metadata->>'document_number' = ANY(%s)
+                    OR metadata->'qse_doc'->>'code' = ANY(%s)
+                    OR UPPER(name) = ANY(%s)
+                  )
+                ORDER BY updated_at DESC
+                """,
+                (organization_id, normalized, normalized, normalized, normalized),
+            )
+            rows = cursor.fetchall()
+
+        assets: list[dict] = []
+        for row in rows:
+            data = dict(row)
+            asset_id = data.get("id")
+            if asset_id is not None:
+                data["id"] = str(asset_id)
+            asset_uid = data.get("asset_uid")
+            if asset_uid is not None:
+                data["asset_uid"] = str(asset_uid)
+            metadata = data.get("metadata") or {}
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except json.JSONDecodeError:
+                    metadata = {}
+            data["metadata"] = metadata
+            content = data.get("content") or {}
+            if isinstance(content, str):
+                try:
+                    content = json.loads(content)
+                except json.JSONDecodeError:
+                    content = {}
+            data["content"] = content
+            assets.append(data)
+
+        return assets
+    finally:
+        conn.close()
 
 # =========================
 # Assets table integrations

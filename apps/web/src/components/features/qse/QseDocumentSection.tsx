@@ -21,7 +21,7 @@ type QseDocumentSectionProps = {
  * edit/export controls and Viewer/Editor toggle.
  *
  * - Uses TinyMCE-based QseDocEditor (Quill replaced) for editing
- * - Shows live Revision/Approver via /api/qse/[docId]/meta
+ * - Shows live Revision/Approver via /api/v1/qse/docs/[docId]/meta
  * - Editor commit updates meta fields in-place via element IDs
  */
 export default function QseDocumentSection(props: QseDocumentSectionProps) {

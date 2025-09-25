@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
-import { Packer, Document, Paragraph, HeadingLevel, TextRun } from 'docx'
 import HTMLtoDOCX from 'html-to-docx'
+import { findQseAssetByDocId, resolveAssetName } from '../../_utils'
 
 export async function GET(
   req: Request,
@@ -16,6 +16,7 @@ export async function GET(
 
     const { docId } = await params
     const decodedDocId = decodeURIComponent(docId)
+    const normalizedDocId = decodedDocId.trim().toUpperCase()
 
     // Get organization ID from user's organizations
     const orgResult = await pool.query(`
@@ -30,20 +31,14 @@ export async function GET(
 
     const organizationId = orgResult.rows[0].organization_id
 
-    // Find the QSE asset by document number
-    const result = await pool.query(`
-      SELECT id, name, content FROM public.assets
-      WHERE organization_id = $1 AND asset_type = 'qse_doc' AND name = $2
-      LIMIT 1
-    `, [organizationId, decodedDocId])
+    const asset = await findQseAssetByDocId(organizationId, normalizedDocId)
 
-    if (result.rows.length === 0) {
+    if (!asset) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    const asset = result.rows[0]
     const content = asset.content as any
-    const title = asset.name || decodedDocId || 'QSE Document'
+    const title = resolveAssetName(normalizedDocId, asset.name) || 'QSE Document'
     const html = (content.html as string) || ((content.body as string) || '').replace(/\n/g, '<br/>')
 
     const buffer = await HTMLtoDOCX(
@@ -67,4 +62,3 @@ export async function GET(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

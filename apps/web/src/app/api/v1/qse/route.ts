@@ -26,11 +26,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
-    const result = await pool.query(`
-      SELECT a.* FROM public.asset_heads a
-      WHERE a.organization_id = $1 AND a.type IN ('policy', 'procedure', 'form', 'template', 'register', 'manual', 'statement', 'plan', 'matrix', 'minutes', 'report')
-      ORDER BY a.type, a.created_at DESC
-    `, [organizationId])
+    const result = await pool.query(
+      `
+        SELECT a.*
+        FROM public.asset_heads a
+        WHERE a.organization_id = $1
+          AND (
+            (a.document_number IS NOT NULL AND UPPER(a.document_number) LIKE 'QSE-%')
+            OR (a.metadata->>'document_number') ILIKE 'QSE-%'
+            OR (a.metadata->'qse_doc'->>'code') ILIKE 'QSE-%'
+            OR UPPER(a.name) LIKE 'QSE-%'
+          )
+        ORDER BY
+          a.document_number NULLS LAST,
+          a.updated_at DESC
+      `,
+      [organizationId]
+    )
 
     return NextResponse.json({ documents: result.rows })
   } catch (error) {

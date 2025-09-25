@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { pool } from '@/lib/db'
+import { findQseAssetByDocId } from '../../_utils'
 
 export async function POST(
   req: Request,
@@ -28,18 +29,13 @@ export async function POST(
 
     const organizationId = orgResult.rows[0].organization_id
 
-    // Find the QSE asset by document number
-    const assetResult = await pool.query(`
-      SELECT id FROM public.assets
-      WHERE organization_id = $1 AND asset_type = 'qse_doc' AND name = $2
-      LIMIT 1
-    `, [organizationId, decodedDocId])
+    const asset = await findQseAssetByDocId(organizationId, decodedDocId)
 
-    if (assetResult.rows.length === 0) {
+    if (!asset) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    const assetId = assetResult.rows[0].id
+    const assetId = asset.id
 
     // For now, just update the updated_at timestamp as a simple "commit"
     // This can be enhanced later with proper revision tracking
@@ -59,4 +55,3 @@ export async function POST(
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
-

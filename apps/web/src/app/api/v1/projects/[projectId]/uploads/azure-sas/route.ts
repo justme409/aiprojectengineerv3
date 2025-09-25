@@ -24,7 +24,6 @@ export async function POST(
       return NextResponse.json({ error: 'Azure storage not configured' }, { status: 500 })
     }
 
-    // Normalize incoming file descriptors: support { name, contentType } and { file_name, content_type }
     const normalized = (files as any[]).map((f: any) => ({
       name: f.name ?? f.file_name,
       contentType: f.contentType ?? f.content_type ?? 'application/octet-stream',
@@ -32,7 +31,6 @@ export async function POST(
 
     const uploadUrls = await azureStorage.generateUploadUrls(normalized, projectId)
 
-    // Return both shapes for compatibility
     const uploads = uploadUrls.map(u => ({
       filename: u.fileName,
       uploadUrl: u.uploadUrl,
